@@ -5,6 +5,16 @@ import static org.junit.Assert.*;
 import static dev.evoker.homeholdcts.TriggerClassifier.Source.*;
 
 public class TriggerClassifierTest {
+    @Test public void diagnosticDecisionsDoNotMoveDebounceWindow() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(POWER, c.accept(KEY, 0));
+        assertEquals(TriggerClassifier.Decision.ACCEPTED, c.decision());
+        assertEquals(NONE, c.accept(MONITOR, 2499));
+        assertEquals(TriggerClassifier.Decision.DEBOUNCED, c.decision());
+        assertEquals(POWER, c.observedSource());
+        assertEquals(POWER, c.accept(KEY, 2500));
+        assertEquals(TriggerClassifier.Decision.ACCEPTED, c.decision());
+    }
     private static final String KEY = "KEYLOG_SingleKeyGesture: Detect long press KEYCODE_POWER";
     private static final String MONITOR = "KEYLOG_SinglePowerKeyMonitor: PowerKey:onLongPress, underWaterCameraStatus = false";
     private static final String SERVICE = "ActivityManager: Unable to start service Intent { act=heytap.intent.action.ACTIVATE_SPEECH_ASSIST cmp=com.heytap.speechassist/.core.SpeechService }: not found";

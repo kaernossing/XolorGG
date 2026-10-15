@@ -61,10 +61,7 @@ public final class WatcherRescueJobService extends JobService {
 
     @Override
     public boolean onStartJob(JobParameters params) {
-        boolean enabled = getSharedPreferences(
-                MainActivity.PREFS,
-                MODE_PRIVATE)
-                .getBoolean(MainActivity.PREF_ENABLED, false);
+        boolean enabled = RunIntent.enabled(this);
 
         if (enabled) {
             Intent service = new Intent(this, HomeHoldService.class);

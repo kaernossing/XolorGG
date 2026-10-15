@@ -12,6 +12,16 @@ public final class WirelessRecoveryBridge extends ContentProvider {
     @Override public boolean onCreate() { return true; }
     @Override public Bundle call(String method, String arg, Bundle extras) {
         if (Binder.getCallingUid() != android.os.Process.myUid()) throw new SecurityException("Same application required");
+        if ("diagnostics".equals(method)) {
+            Bundle result = new Bundle();
+            if (!"summary".equals(arg)) result.putString("applicationDiagnostics", AgentDiagnostics.readApp(getContext()));
+            ActivationDiagnostics.addTo(result);
+            return result;
+        }
+        if ("run_intent".equals(method) || "run_status".equals(method)) {
+            if ("run_intent".equals(method)) RunIntent.setLocal(getContext(), extras != null && extras.getBoolean("runEnabled"));
+            Bundle result = new Bundle(); result.putBoolean("runEnabled", RunIntent.localEnabled(getContext())); return result;
+        }
         return WirelessRecovery.get(getContext()).command(method, extras == null ? Bundle.EMPTY : extras);
     }
     @Override public Cursor query(Uri u, String[] p, String s, String[] a, String o) { throw new UnsupportedOperationException(); }

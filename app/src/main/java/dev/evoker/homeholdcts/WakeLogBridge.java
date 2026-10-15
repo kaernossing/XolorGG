@@ -24,10 +24,12 @@ public final class WakeLogBridge extends ContentProvider {
         if (!"attach".equals(method)) throw new IllegalArgumentException("Unknown method");
         IBinder binder = extras == null ? null : extras.getBinder("agent");
         if (binder == null) throw new IllegalArgumentException("Missing agent");
+        if (extras.getInt("version", -1) != BuildConfig.VERSION_CODE) throw new SecurityException("Agent version mismatch");
         IDesktopSearchAgent next = IDesktopSearchAgent.Stub.asInterface(binder);
         try {
             binder.linkToDeath(() -> {
                 if (agent == next) {
+                    AgentDiagnostics.app(getContext(), (RunIntent.localEnabled(getContext()) ? "AGENT_DISAPPEARED reason=unconfirmed session=" : "AGENT_DISCONNECTED after_master_stop session=") + extras.getString("session", "unknown"));
                     agent = null;
                     HomeHoldService.adbAgentChanged();
                     WirelessRecovery.get(getContext()).agentChanged();
@@ -38,14 +40,16 @@ public final class WakeLogBridge extends ContentProvider {
         if (!getContext().getSharedPreferences("adb_log_source", 0).edit()
                 .putBoolean("selected", true).commit()) throw new IllegalStateException("Cannot save log source");
         agent = next;
+        AgentDiagnostics.app(getContext(), "AGENT_ATTACHED session=" + extras.getString("session", "unknown") + " generation=" + extras.getInt("generation"));
         HomeHoldService.adbAgentChanged();
         WirelessRecovery.get(getContext()).agentChanged();
-        if (getContext().getSharedPreferences(MainActivity.PREFS, 0)
-                .getBoolean(MainActivity.PREF_ENABLED, false)) {
+        if (RunIntent.localEnabled(getContext())) {
             getContext().startForegroundService(new Intent(getContext(), HomeHoldService.class));
         }
         Bundle result = new Bundle();
         result.putBoolean("attached", true);
+        result.putInt("version", BuildConfig.VERSION_CODE);
+        result.putBoolean("runEnabled", RunIntent.localEnabled(getContext()));
         return result;
     }
     @Override public Cursor query(Uri u, String[] p, String s, String[] a, String o) { throw new UnsupportedOperationException(); }

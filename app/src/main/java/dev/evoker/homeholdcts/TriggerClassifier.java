@@ -4,6 +4,11 @@ package dev.evoker.homeholdcts;
 /** Classifies live ColorOS log events. Called under the watcher's trigger lock. */
 final class TriggerClassifier {
     enum Source { NONE, POWER, HOME_GESTURE, VOICE_WAKE }
+    enum Decision { IGNORED, VOICE_MARKER, DEBOUNCED, POWER_FOLLOW_UP, ACCEPTED }
+    private Decision decision = Decision.IGNORED;
+    private Source observed = Source.NONE;
+    Decision decision() { return decision; }
+    Source observedSource() { return observed; }
     static final long DEBOUNCE_MS = 2500L;
     private static final long POWER_MARKER_WINDOW_MS = 500L;
     private static final long VOICE_WAKE_MARKER_WINDOW_MS = 1000L;
@@ -20,9 +25,13 @@ final class TriggerClassifier {
     }
 
     Source accept(String line, long now) {
+        decision = Decision.IGNORED;
+        observed = Source.NONE;
         if (line == null || line.isEmpty()) return Source.NONE;
         if (line.contains("wakeUpSpeechAssist caller_package: com.oplus.ovoicemanager.wakeup")) {
             lastVoiceMarker = now;
+            decision = Decision.VOICE_MARKER;
+            observed = Source.VOICE_WAKE;
             return Source.NONE;
         }
         boolean power = line.contains("Detect long press KEYCODE_POWER")
@@ -35,13 +44,19 @@ final class TriggerClassifier {
 
         boolean voice = !power && recent(lastVoiceMarker, now, VOICE_WAKE_MARKER_WINDOW_MS);
         if (voice) lastVoiceMarker = -1L;
+        observed = power ? Source.POWER : (voice ? Source.VOICE_WAKE : Source.HOME_GESTURE);
         // Only an accepted activation moves the cooldown. Duplicate OEM markers
         // and the following speech-service attempt must never schedule another.
-        if (recent(lastTrigger, now, DEBOUNCE_MS - 1L)) return Source.NONE;
+        if (recent(lastTrigger, now, DEBOUNCE_MS - 1L)) {
+            decision = Decision.DEBOUNCED;
+            return Source.NONE;
+        }
         if (!power && !voice && recent(lastPowerMarker, now, POWER_MARKER_WINDOW_MS)) {
+            decision = Decision.POWER_FOLLOW_UP;
             return Source.NONE;
         }
         lastTrigger = now;
+        decision = Decision.ACCEPTED;
         return power ? Source.POWER : (voice ? Source.VOICE_WAKE : Source.HOME_GESTURE);
     }
 

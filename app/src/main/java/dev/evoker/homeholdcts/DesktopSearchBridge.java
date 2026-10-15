@@ -19,7 +19,7 @@ public final class DesktopSearchBridge extends ContentProvider {
 
     @Override public boolean onCreate() { return true; }
 
-    @Override public synchronized Bundle call(String method, String arg, Bundle extras) {
+    @Override public Bundle call(String method, String arg, Bundle extras) {
         int uid = Binder.getCallingUid();
         if (uid != 2000) throw new SecurityException("ADB shell required");
         Bundle out = new Bundle();
@@ -27,11 +27,17 @@ public final class DesktopSearchBridge extends ContentProvider {
             if ("attach".equals(method)) {
                 IBinder binder = extras == null ? null : extras.getBinder("agent");
                 if (binder == null) throw new IllegalArgumentException("Missing agent");
+                if (extras.getInt("version", -1) != BuildConfig.VERSION_CODE) throw new SecurityException("Agent version mismatch");
+                out.putInt("version", BuildConfig.VERSION_CODE);
                 IDesktopSearchAgent next = IDesktopSearchAgent.Stub.asInterface(binder);
                 binder.linkToDeath(() -> { if (agent == next) agent = null; }, 0);
                 agent = next;
                 out.putBoolean("enabled", getContext().getSharedPreferences(
                         MainActivity.PREFS, 0).getBoolean(PREF, false));
+                out.putBoolean("doublePowerRequested", getContext().getSharedPreferences(MainActivity.PREFS, 0)
+                        .getBoolean(DoublePowerRoute.PREF_ENABLED, false));
+                out.putString("doublePowerTarget", getContext().getSharedPreferences(MainActivity.PREFS, 0)
+                        .getString(DoublePowerRoute.PREF_TARGET, DoublePowerRoute.WALLET));
             } else if ("remember_controller".equals(method)) {
                 lastController = extras == null ? null : extras.getBinder("controller");
                 lastControllerIdentity = extras == null ? "" : extras.getString("identity", "");
@@ -41,8 +47,38 @@ public final class DesktopSearchBridge extends ContentProvider {
                 if (lastController != null && !lastController.pingBinder())
                     out.putString("identity", lastControllerIdentity);
             } else if ("status".equals(method)) {
-                if (agent == null) out.putString("error", "Agent not connected");
-                else return agent.getStatus();
+                IDesktopSearchAgent current = agent;
+                boolean connected = false;
+                if (current != null) {
+                    try { out = current.getStatus(); connected = true; }
+                    catch (android.os.RemoteException e) { if (agent == current) agent = null; }
+                }
+                if (!connected) out.putString("error", "Agent not connected");
+                // Internal provider belongs to :watcher; do not forward the shell identity.
+                long identity = Binder.clearCallingIdentity();
+                try {
+                    out.putBoolean("runEnabled", RunIntent.enabled(getContext()));
+                    out.putInt("appVersionCode", BuildConfig.VERSION_CODE);
+                    out.putBoolean("agentConnected", connected);
+                    boolean requested = getContext().getSharedPreferences(MainActivity.PREFS, 0)
+                            .getBoolean(PREF, false);
+                    out.putBoolean("desktopRequested", requested);
+                    if ("compact".equals(arg)) {
+                        Bundle compact = new Bundle();
+                        compact.putBoolean("runEnabled", out.getBoolean("runEnabled"));
+                        compact.putInt("appVersionCode", BuildConfig.VERSION_CODE);
+                        compact.putBoolean("agentConnected", connected);
+                        compact.putInt("agentVersionCode", out.getInt("version", -1));
+                        compact.putInt("pid", out.getInt("pid", -1));
+                        compact.putString("lifecycle", out.getString("lifecycle", "ABSENT"));
+                        compact.putBoolean("wakeActive", out.getBoolean("wakeActive"));
+                        compact.putBoolean("desktopRequested", requested);
+                        compact.putBoolean("desktopEnabled", out.getBoolean("enabled"));
+                        return compact;
+                    }
+                    Bundle diagnostics = getContext().getContentResolver().call(WirelessRecoveryBridge.URI, "diagnostics", null, null);
+                    if (diagnostics != null) out.putAll(diagnostics);
+                } finally { Binder.restoreCallingIdentity(identity); }
             } else if ("stop".equals(method)) {
                 if (agent != null) agent.shutdown();
                 out.putBoolean("stopped", true);

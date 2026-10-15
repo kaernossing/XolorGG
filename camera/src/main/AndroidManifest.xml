@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <queries><package android:name="com.oplus.camera" /></queries>
+    <application android:label="ColorCamera" android:icon="@mipmap/ic_launcher" android:allowBackup="false" android:supportsRtl="true" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name="dev.evoker.homeholdcts.CameraActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <service android:name="dev.evoker.homeholdcts.CameraService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-enabled physical power shortcut to the system camera, with a local ADB agent" />
+        </service>
+        <provider android:name="dev.evoker.homeholdcts.CameraBridge" android:authorities="io.github.joeyandu.colorcamera.bridge" android:exported="true" android:permission="android.permission.DUMP" />
+    </application>
+</manifest>

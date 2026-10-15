@@ -29,9 +29,7 @@ public class RestartReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        boolean enabled = context
-                .getSharedPreferences(MainActivity.PREFS, Context.MODE_PRIVATE)
-                .getBoolean(MainActivity.PREF_ENABLED, false);
+        boolean enabled = RunIntent.enabled(context);
 
         if (!enabled) {
             return;

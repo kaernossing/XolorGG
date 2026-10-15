@@ -209,10 +209,7 @@ final class FirstRunBootstrap {
 
     private void refreshWatcherForegroundTypeIfEnabled() {
         try {
-            boolean enabled = context.getSharedPreferences(
-                    MainActivity.PREFS,
-                    Context.MODE_PRIVATE)
-                    .getBoolean(MainActivity.PREF_ENABLED, false);
+            boolean enabled = RunIntent.enabled(context);
             if (!enabled) return;
 
             Intent refresh = new Intent(context, HomeHoldService.class)

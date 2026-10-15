@@ -255,8 +255,15 @@ private final ServiceConnection watcherConnection =
     private View setupPage;
     private View advancedPage;
     private View betaPage;
+    private MaterialSwitch doublePowerToggle;
+    private RadioGroup doublePowerChoices;
+    private TextView doublePowerStatus;
+    private boolean doublePowerRendering, doublePowerBusy;
+    private final int walletChoiceId = View.generateViewId(), cameraChoiceId = View.generateViewId();
     private MaterialSwitch desktopSearchToggle;
     private TextView desktopSearchStatus;
+    private TextView assistantDiagnosticsStatus;
+    private String assistantDiagnosticsChinese = "尚未读取诊断状态";
     private MaterialSwitch wirelessToggle;
     private TextView wirelessStatus;
     private boolean wirelessRendering;
@@ -267,6 +274,7 @@ private final ServiceConnection watcherConnection =
     private final Runnable desktopSearchPoll = new Runnable() {
         @Override public void run() {
             refreshDesktopSearch(null);
+            refreshDoublePower(null, null);
             wirelessRequest("status", null);
             if (activityResumed) ui.postDelayed(this, 4000);
         }
@@ -467,7 +475,7 @@ private final ServiceConnection watcherConnection =
                 Toast.makeText(
                         this,
                         tr(result.success
-                                ? "Activation sound saved · max 3 seconds"
+                                ? "Request sound saved · max 3 seconds"
                                 : "Could not import activation sound"),
                         result.success ? Toast.LENGTH_SHORT : Toast.LENGTH_LONG)
                         .show();
@@ -510,8 +518,7 @@ protected void onStart() {
     super.onStart();
 
     if (termsAccepted()
-            && getSharedPreferences(PREFS, MODE_PRIVATE)
-            .getBoolean(PREF_ENABLED, false)) {
+            && RunIntent.enabled(this)) {
         bindWatcher();
     }
 }
@@ -525,8 +532,7 @@ protected void onResume() {
     ui.post(desktopSearchPoll);
 
     if (termsAccepted()
-            && getSharedPreferences(PREFS, MODE_PRIVATE)
-            .getBoolean(PREF_ENABLED, false)) {
+            && RunIntent.enabled(this)) {
 
         startWatcher();
         bindWatcher();
@@ -1054,7 +1060,7 @@ protected void onStop() {
         runtimeBody.addView(title);
 
         TextView desc = supporting(
-                "Adjust activation delay, haptic feedback and the local success sound used by " +
+                "Adjust activation delay, haptic feedback and the request acknowledgement sound used by " +
                 "Circle to Search and the Assistant session. Changes apply immediately.");
         runtimeBody.addView(desc, margins(0, 4, 0, 12));
 
@@ -1099,7 +1105,7 @@ protected void onStop() {
         runtimeBody.addView(vibration);
 
         MaterialSwitch activationSound = new MaterialSwitch(this);
-        activationSound.setText(tr("Activation sound"));
+        activationSound.setText(tr("Request sound"));
         activationSound.setTextColor(onSurface);
         activationSound.setChecked(getSharedPreferences(PREFS, MODE_PRIVATE)
                 .getBoolean(PREF_SOUND_ON_ACTIVATION, DEFAULT_SOUND_ON_ACTIVATION));
@@ -1257,6 +1263,7 @@ protected void onStop() {
         intro.addView(introBody);
         root.addView(intro, margins(0, 0, 0, 14));
 
+        root.addView(buildDoublePowerCard(), margins(0, 0, 0, 14));
         root.addView(buildDesktopSearchCard(), margins(0, 0, 0, 14));
         root.addView(buildWirelessRecoveryCard(), margins(0, 0, 0, 14));
 
@@ -1365,6 +1372,100 @@ protected void onStop() {
         return scroll;
     }
 
+    private View buildDoublePowerCard() {
+        MaterialCardView card = sectionCard();
+        LinearLayout body = sectionBody();
+        body.addView(text("Double-press power", 20, onSurface, Typeface.BOLD));
+        body.addView(supporting("Redirect the system wallet shortcut to your chosen app. Keep the system double-press wallet gesture enabled. Requires the ADB agent; device unlock may be required."), margins(0, 4, 0, 10));
+        doublePowerToggle = new MaterialSwitch(this);
+        doublePowerToggle.setText("Customize double-press power");
+        doublePowerToggle.setTextColor(onSurface);
+        doublePowerChoices = new RadioGroup(this);
+        for (String target : new String[]{DoublePowerRoute.WALLET, DoublePowerRoute.CAMERA}) {
+            MaterialRadioButton button = new MaterialRadioButton(this);
+            button.setId(DoublePowerRoute.WALLET.equals(target) ? walletChoiceId : cameraChoiceId);
+            button.setText(DoublePowerRoute.WALLET.equals(target) ? "Google Wallet" : "System camera");
+            button.setTextColor(onSurface);
+            doublePowerChoices.addView(button);
+        }
+        doublePowerToggle.setChecked(getSharedPreferences(PREFS, 0).getBoolean(DoublePowerRoute.PREF_ENABLED, false));
+        doublePowerChoices.check(DoublePowerRoute.CAMERA.equals(getSharedPreferences(PREFS, 0)
+                .getString(DoublePowerRoute.PREF_TARGET, DoublePowerRoute.WALLET)) ? cameraChoiceId : walletChoiceId);
+        doublePowerChoices.setVisibility(doublePowerToggle.isChecked() ? View.VISIBLE : View.GONE);
+        doublePowerToggle.setOnCheckedChangeListener((b, checked) -> {
+            if (!doublePowerRendering) refreshDoublePower(checked, null);
+        });
+        doublePowerChoices.setOnCheckedChangeListener((group, id) -> {
+            if (!doublePowerRendering) refreshDoublePower(true, id == cameraChoiceId ? DoublePowerRoute.CAMERA : DoublePowerRoute.WALLET);
+        });
+        body.addView(doublePowerToggle);
+        body.addView(doublePowerChoices);
+        doublePowerStatus = supporting("Checking the ADB agent…");
+        body.addView(doublePowerStatus, margins(0, 6, 0, 10));
+        MaterialButton help = compactButton("使用说明（中文）");
+        help.setOnClickListener(v -> new MaterialAlertDialogBuilder(this).setTitle("双击电源键")
+                .setMessage("开启后选择 Google 钱包或系统相机，亮屏、锁屏和熄屏共用此选择。系统双击电源键的钱包快捷功能需要保持开启。关闭此开关恢复系统原行为。\n\n需要 ADB 代理连接；锁屏时使用安全相机入口，钱包遵守系统解锁要求。不修改默认支付应用。请求被接受不等于界面已经出现。\n\n代理失联时停止拦截，不自动重复启动目标应用。")
+                .setPositiveButton("确定", null).show());
+        body.addView(help);
+        card.addView(body);
+        return card;
+    }
+
+    private void refreshDoublePower(Boolean requested, String requestedTarget) {
+        if (doublePowerToggle == null || doublePowerBusy || isDestroyed()) return;
+        doublePowerBusy = true;
+        doublePowerToggle.setEnabled(false);
+        for (int i = 0; i < doublePowerChoices.getChildCount(); i++) doublePowerChoices.getChildAt(i).setEnabled(false);
+        desktopSearchIo.execute(() -> {
+            android.content.SharedPreferences prefs = getSharedPreferences(PREFS, 0);
+            boolean desired = prefs.getBoolean(DoublePowerRoute.PREF_ENABLED, false);
+            String target = prefs.getString(DoublePowerRoute.PREF_TARGET, DoublePowerRoute.WALLET);
+            String message;
+            try {
+                IDesktopSearchAgent agent = DesktopSearchBridge.agent;
+                if (agent == null || !agent.asBinder().pingBinder()) {
+                    if (Boolean.FALSE.equals(requested)) desired = false;
+                    message = "Agent disconnected. Activate with ADB before enabling. Saved choice is retained.";
+                } else {
+                    Bundle state = agent.getStatus();
+                    if (state.getInt("version") != BuildConfig.VERSION_CODE) {
+                        message = "Agent version is outdated. Reactivate with ADB.";
+                    } else {
+                        if (requested != null) {
+                            String destination = requestedTarget == null ? target : requestedTarget;
+                            state = agent.setDoublePower(requested, destination);
+                            if (state.getString("doublePowerError", "").isEmpty()
+                                    && state.getBoolean("doublePowerEnabled") == requested) {
+                                desired = requested;
+                                target = destination;
+                            }
+                        }
+                        message = (state.getBoolean("doublePowerEnabled") ? "Active" : "Not intercepting; original system route")
+                                + " · " + state.getString("lifecycle", "Unknown")
+                                + "\nRequests accepted (UI not verified): " + state.getInt("doublePowerRequests");
+                        String failure = state.getString("doublePowerError", "");
+                        if (!failure.isEmpty()) message += "\n" + failure;
+                    }
+                }
+            } catch (Exception e) { message = "Unable to verify double-press status: " + e.getClass().getSimpleName(); }
+            prefs.edit().putBoolean(DoublePowerRoute.PREF_ENABLED, desired).putString(DoublePowerRoute.PREF_TARGET, target).apply();
+            final boolean checked = desired;
+            final String chosen = target, status = message;
+            runOnUiThread(() -> {
+                doublePowerBusy = false;
+                if (isDestroyed()) return;
+                doublePowerRendering = true;
+                doublePowerToggle.setChecked(checked);
+                doublePowerChoices.check(DoublePowerRoute.CAMERA.equals(chosen) ? cameraChoiceId : walletChoiceId);
+                doublePowerChoices.setVisibility(checked ? View.VISIBLE : View.GONE);
+                doublePowerRendering = false;
+                doublePowerToggle.setEnabled(true);
+                for (int i = 0; i < doublePowerChoices.getChildCount(); i++) doublePowerChoices.getChildAt(i).setEnabled(true);
+                doublePowerStatus.setText(status);
+            });
+        });
+    }
+
     private View buildDesktopSearchCard() {
         MaterialCardView card = sectionCard();
         LinearLayout body = sectionBody();
@@ -1382,7 +1483,14 @@ protected void onStop() {
         body.addView(desktopSearchToggle);
         desktopSearchStatus = supporting("Checking the ADB agent…");
         body.addView(desktopSearchStatus, margins(0, 6, 0, 10));
-        body.addView(supporting("The ADB agent also listens for wake triggers and can run after USB is disconnected. This switch controls desktop search only. Restart a stopped agent with ADB or enable wireless recovery below. Do not run another activity monitor at the same time."));
+        assistantDiagnosticsStatus = supporting("Reading assistant diagnostics…");
+        body.addView(assistantDiagnosticsStatus, margins(0, 6, 0, 10));
+        MaterialButton diagnosticChinese = compactButton("诊断说明（中文）");
+        diagnosticChinese.setOnClickListener(v -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("助手诊断").setMessage(assistantDiagnosticsChinese)
+                .setPositiveButton("确定", null).show());
+        body.addView(diagnosticChinese);
+        body.addView(supporting("The ADB agent also listens for wake triggers and can run after USB is disconnected. This option controls desktop search while the master service is on. Stop all features exits the agent. Restart requires ADB or available wireless recovery. Do not run another activity monitor at the same time."));
         MaterialButton command = compactButton("Copy ADB activation command");
         command.setOnClickListener(v -> {
             copy("ColorGoogle desktop search", DesktopSearchActivation.command());
@@ -1476,6 +1584,7 @@ protected void onStop() {
             boolean desired = getSharedPreferences(PREFS, MODE_PRIVATE)
                     .getBoolean(DesktopSearchBridge.PREF, false);
             String message;
+            Bundle assistantState = new Bundle();
             IDesktopSearchAgent agent = DesktopSearchBridge.agent;
             try {
                 if (agent == null || !agent.asBinder().pingBinder()) {
@@ -1483,15 +1592,18 @@ protected void onStop() {
                     message = desired ? "Not active: agent disconnected. Check recovery below or activate with computer ADB." : "Disabled; ADB agent disconnected.";
                 } else {
                     Bundle state = agent.getStatus();
+                    assistantState = state;
                     if (state.getInt("version") != BuildConfig.VERSION_CODE) {
                         if (requested != null) desired = requested;
                         message = "Agent version is outdated. Run the ADB activation command again.";
                     } else {
                         if (requested != null) state = agent.setEnabled(requested);
-                        desired = state.getBoolean("enabled");
+                        if (requested != null) desired = requested;
                         String error = state.getString("error", "");
-                        message = (desired ? "Enabled · Agent connected" : "Disabled · Original search route restored")
+                        message = (state.getBoolean("enabled") ? "Enabled · Agent connected" : "Disabled · Original search route restored")
                                 + "\nGoogle Search requests in this agent session: " + state.getInt("redirects")
+                                + "\nAgent: " + state.getString("lifecycle", "Unknown")
+                                + " · " + state.getString("reason", "")
                                 + "\nWake logs: " + (state.getBoolean("wakeActive") ? "Connected" : "Disconnected")
                                 + (state.getString("wakeError", "").isEmpty() ? "" : " · " + state.getString("wakeError"));
                         if (!error.isEmpty()) message += "\nError: " + error;
@@ -1500,6 +1612,23 @@ protected void onStop() {
             } catch (Exception e) {
                 message = "Unable to verify agent status. Check again or activate with ADB: " + e.getClass().getSimpleName();
             }
+            Bundle requestState = new Bundle();
+            try {
+                Bundle result = getContentResolver().call(WirelessRecoveryBridge.URI, "diagnostics", "summary", null);
+                if (result != null) requestState = result;
+            } catch (RuntimeException e) {
+                android.util.Log.w("ColorGoogleDiagnostics", "Request status unavailable: " + e.getClass().getSimpleName());
+            }
+            final String assistantSummary = DiagnosticSummary.render(false,
+                    assistantState.getString("assistantConnection", "UNKNOWN"),
+                    assistantState.getLong("assistantSampleAgeMs", -1),
+                    requestState.getString("requestResult", "UNKNOWN"), requestState.getString("requestTarget", ""),
+                    assistantState.getString("assistantSampleReason", "UNAVAILABLE"));
+            final String assistantChinese = DiagnosticSummary.render(true,
+                    assistantState.getString("assistantConnection", "UNKNOWN"),
+                    assistantState.getLong("assistantSampleAgeMs", -1),
+                    requestState.getString("requestResult", "UNKNOWN"), requestState.getString("requestTarget", ""),
+                    assistantState.getString("assistantSampleReason", "UNAVAILABLE"));
             getSharedPreferences(PREFS, MODE_PRIVATE).edit()
                     .putBoolean(DesktopSearchBridge.PREF, desired).apply();
             final boolean checked = desired;
@@ -1512,6 +1641,8 @@ protected void onStop() {
                 desktopSearchRendering = false;
                 desktopSearchToggle.setEnabled(true);
                 desktopSearchStatus.setText(status);
+                assistantDiagnosticsStatus.setText(assistantSummary);
+                assistantDiagnosticsChinese = assistantChinese;
             });
         });
     }
@@ -3028,6 +3159,15 @@ private void addStep3(LinearLayout root) {
             }
         });
         body.addView(runButton, margins(0, 14, 0, 0));
+        MaterialButton stopAll = outlinedButton("Stop all ColorGoogle features");
+        stopAll.setOnClickListener(v -> {
+            RunIntent.set(this, false);
+            unbindWatcher();
+            watcherSessionState = WatcherIpc.STATE_STOPPED;
+            refreshAll();
+            Toast.makeText(this, "All features stopped. Starting the agent again requires ADB or available wireless recovery.", Toast.LENGTH_LONG).show();
+        });
+        body.addView(stopAll, margins(0, 8, 0, 0));
 
         attachSetupSection(root, shell, body, 18);
     }
@@ -3049,8 +3189,7 @@ private void addStep3(LinearLayout root) {
             return;
         }
 
-        getSharedPreferences(PREFS, MODE_PRIVATE)
-                .edit().putBoolean(PREF_ENABLED, true).commit();
+        RunIntent.set(this, true);
 
         startWatcher();
         bindWatcher();
@@ -4229,12 +4368,7 @@ private void requestLogSessionReconnect(
     }
 
     boolean enabled =
-            getSharedPreferences(
-                    PREFS,
-                    MODE_PRIVATE)
-                    .getBoolean(
-                            PREF_ENABLED,
-                            false);
+            RunIntent.enabled(this);
 
     if (!enabled) {
         if (force) {
@@ -4389,8 +4523,7 @@ private void bindWatcher() {
     }
 
     boolean enabled =
-            getSharedPreferences(PREFS, MODE_PRIVATE)
-                    .getBoolean(PREF_ENABLED, false);
+            RunIntent.enabled(this);
 
     if (!enabled) {
         return;
@@ -4601,6 +4734,7 @@ private void syncWatcherPrefs() {
     }
 
     private boolean pref(String key) {
+        if (PREF_ENABLED.equals(key)) return RunIntent.enabled(this);
         return getSharedPreferences(PREFS, MODE_PRIVATE)
                 .getBoolean(key, false);
     }

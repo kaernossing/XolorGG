@@ -49,8 +49,8 @@ locales_xml = read("app/src/main/res/xml/locales_config.xml")
 
 # Build / identity / signing.
 check("applicationId", 'applicationId "dev.evoker.homeholdcts"' in gradle)
-check("versionCode", "versionCode 16030000" in gradle)
-check("versionName", 'versionName "16.3.0"' in gradle)
+check("versionCode", "versionCode 17000100" in gradle)
+check("versionName", '"17.0.1"' in gradle)
 check("compileSdk", "compileSdk 36" in gradle)
 check("targetSdk", "targetSdk 36" in gradle)
 check("minSdk", "minSdk 32" in gradle)
@@ -290,10 +290,9 @@ check("generic redistributor disclaimer", "controversial or unrelated content" i
 
 # The platform-neutral deployment script must match the app activation logic.
 activation = read("app/src/main/java/dev/evoker/homeholdcts/DesktopSearchActivation.java")
-script_part = activation.split('static final String SCRIPT = String.join("\\n",', 1)[1].split('    static String command()', 1)[0]
-script_lines = [json.loads(token) for token in re.findall(r'"(?:\\.|[^"\\])*"', script_part)]
-packaged_script = "\n".join(line for line in read("tools/activate-agent.sh").splitlines() if not line.startswith("#"))
-check("packaged ADB script matches app", packaged_script == "\n".join(script_lines))
+check("starter embedded from canonical source", "BuildConfig.AGENT_START_SCRIPT" in activation
+      and "tools/activate-agent.sh" in gradle)
+check("camera coexistence guard", "pidof colorcamera-agent" in read("tools/activate-agent.sh"))
 check("generic ADB device placeholder", 'adb -s SERIAL shell' in activation)
 check("English documentation pair", (ROOT / "README.zh-CN.md").is_file() and "How to use with an Agent" in read("README.md"))
 
@@ -305,12 +304,12 @@ for path in [ROOT / "app/src/main/AndroidManifest.xml", *RES.rglob("*.xml")]:
         errors.append(("XML parse: " + str(path.relative_to(ROOT)), str(exc)))
 
 if errors:
-    print("ColorGoogle 16.3.0 release sanity: FAILED")
+    print("ColorGoogle source sanity: FAILED")
     for name, detail in errors:
         print(" -", name + (": " + detail if detail else ""))
     sys.exit(1)
 
-print("ColorGoogle 16.3.0 release sanity: PASSED")
+print("ColorGoogle source sanity: PASSED")
 print(" - English source keys:", len(expected_keys))
 for note in notes: print(" -", note)
 print(" - release locales:", ", ".join(expected_locales))

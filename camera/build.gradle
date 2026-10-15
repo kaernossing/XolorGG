@@ -1,0 +1,98 @@
+plugins { id 'com.android.application' }
+def signingProperties = new Properties()
+def signingPropertiesFile = rootProject.file("keystore.properties")
+
+if (signingPropertiesFile.exists()) {
+    signingPropertiesFile.withInputStream {
+        signingProperties.load(it)
+    }
+}
+
+def signingValue = { String propertyName, String environmentName ->
+    def value = signingProperties.getProperty(propertyName)
+
+    if (value == null || value.trim().isEmpty()) {
+        value = System.getenv(environmentName)
+    }
+
+    return value
+}
+
+def releaseStoreFile = signingValue("storeFile", "MTA_KEYSTORE")
+def releaseStorePassword = signingValue("storePassword", "MTA_STORE_PASSWORD")
+def releaseKeyAlias = signingValue("keyAlias", "MTA_KEY_ALIAS")
+def releaseKeyPassword = signingValue("keyPassword", "MTA_KEY_PASSWORD")
+
+def hasReleaseSigning =
+        releaseStoreFile != null
+        && !releaseStoreFile.trim().isEmpty()
+        && releaseStorePassword != null
+        && !releaseStorePassword.trim().isEmpty()
+        && releaseKeyAlias != null
+        && !releaseKeyAlias.trim().isEmpty()
+        && releaseKeyPassword != null
+        && !releaseKeyPassword.trim().isEmpty()
+
+def releaseTaskRequested =
+        gradle.startParameter.taskNames.any {
+            it.toLowerCase().contains("release")
+        }
+
+if (releaseTaskRequested && !hasReleaseSigning) {
+    throw new GradleException(
+            """
+Release signing is required.
+
+MindTrigger Assist does not emit an unsigned release APK.
+
+Create <project>/keystore.properties from keystore.properties.example
+or provide these environment variables:
+
+  MTA_KEYSTORE
+  MTA_STORE_PASSWORD
+  MTA_KEY_ALIAS
+  MTA_KEY_PASSWORD
+
+The configured APK signing schemes are:
+  v1 = enabled
+  v2 = enabled
+  v3 = enabled
+  v4 = disabled
+""".stripIndent())
+}
+
+
+android {
+    namespace 'io.github.joeyandu.colorcamera'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'io.github.joeyandu.colorcamera'
+        minSdk 32
+        targetSdk 36
+        versionCode 10000
+        versionName '1.0.0'
+        buildConfigField 'String', 'AGENT_START_SCRIPT', groovy.json.JsonOutput.toJson(rootProject.file('tools/activate-camera.sh').getText('UTF-8'))
+    }
+    buildFeatures { aidl true; buildConfig true }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    signingConfigs {
+        release {
+            enableV1Signing = false
+            enableV2Signing = false
+            enableV3Signing = true
+            enableV4Signing = false
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.release; minifyEnabled false } }
+    dependenciesInfo { includeInApk false; includeInBundle false }
+}
+dependencies {
+    implementation project(':shortcut-core')
+    testImplementation 'junit:junit:4.13.2'
+}

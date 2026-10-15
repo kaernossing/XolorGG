@@ -1,5 +1,14 @@
 # ColorGoogle changelog
 
+## ColorCamera 1.0.0 — preview (2026-10-15)
+
+- Separate `camera` APK (`io.github.joeyandu.colorcamera`, versionCode 10000), opt-in power-double-press to normal/secure OPPO camera only.
+- Extracted shared matching, lifecycle, camera queries/timing, bounded commands and controller ownership into `shortcut-core`; ColorGoogle's existing preferences and package remain unchanged.
+- Dedicated protected bridge, foreground status, bounded local diagnostics and computer activation; no READ_LOGS, overlay, camera/microphone, Google, Shizuku or wireless-pairing dependency in ColorCamera.
+- Cooperative cross-app agent lock, older-agent detection and Mac recovery conflict checks. User stops the other app; no automatic termination or data migration.
+- English UI, bilingual setup/validation guides and original camera icon. Full physical acceptance of the standalone APK is pending; no phone installation performed in this release task.
+
+
 ## 16.3.0 — 2026-10-02
 
 First public ColorGoogle release, based on MindTrigger Assist v16.2.0.
@@ -206,3 +215,44 @@ cache expires, a fresh session requires Android's confirmation UI.
 - Reduced false direct-logd stall deaths: EOF/exception still fail immediately, while silent heartbeat stalls require three misses with a longer settle window.
 - UI now labels READ_LOGS as a package permission and separately proves the live device-log session.
 - No Device Admin. No Shizuku runtime dependency. Alarm/Job/overlay/START_STICKY retention paths are preserved.
+
+## 16.3.1-rc.1 — local survival candidate
+
+- Keep the shell agent alive across app-bridge death; pause and reconnect authenticated bridge generations.
+- Make explicit master stop terminate all features and persist its intent in the watcher process.
+- Share a single non-destructive starter between computer activation and wireless recovery.
+- Separate agent state from wireless-recovery availability; add bounded, content-free local diagnostics.
+- No claim of cgroup independence, reboot persistence, or completed cellular/overnight acceptance.
+
+## 16.3.1-rc.2 — local USB recovery candidate
+
+- Make stale/stopped listener removal idempotent; preserve rejection of stale registrations and protect newer listeners.
+- Complete watcher teardown when an older agent rejects cleanup with the known stale-connection error.
+- Add compact, shell-protected status including master intent and installed/agent versions. The shared starter refuses activation when the master switch is off or unavailable.
+- Add an optional, removable macOS login helper: confirmed USB device only, five-second stabilization, three attempts per connection, version/readiness checks, no replacement of existing agents, bounded local logs.
+- Document the observed O+Connect accessory-mode transition and its distinction from permission expiry. Physical USB, cellular-only and long-duration tests are reported separately; this candidate is not a public release.
+
+
+## 16.3.1-rc.3 — local Android 17 diagnostics candidate
+
+- Persist watcher request IDs, routing/duplicate decisions, primer counts and protocol results without user content.
+- Sample main assistant and session connections asynchronously with bounded output/time, coalescing and stale-state handling.
+- Separate agent health, sampled assistant connection and request acceptance in Beta; include a Chinese diagnostic explanation.
+- Keep routes, API calls and cooldown unchanged; no automatic assistant reset or alternate invocation path.
+- Bound each diagnostic file before writing and keep only the existing two-file rotation per writer.
+- Align the Mac USB helper version check with 16030003. OTA recovery, physical UI acceptance, controlled process cleanup and natural OEM cleanup are verified separately.
+
+## 16.3.1-rc.4 (local candidate)
+
+- Beta opt-in double-power shortcut: Google Wallet or OPPO secure/normal camera.
+- Exact system wallet-entry interception shares the existing monitor with desktop search.
+- Independent switches, duplicate suppression, stale-work cancellation, and bounded launch diagnostics.
+- Physical-device acceptance is recorded in the local delivery report; no public Release.
+
+## 17.0.1 (local build)
+
+- Replace camera current-user and activity-resolution subprocesses with verified shell Binder queries; no stale target cache or fallback.
+- Preserve secure-camera checks, duplicate suppression and launch-wait behavior.
+- Add bounded, content-free per-stage camera timing with explicit unknown values.
+- Retain an instrumented shell-query baseline for later comparison; physical performance/regression testing deferred by user.
+- Update the local Mac helper version check to 17000100.

@@ -41,3 +41,12 @@ Based on MindTrigger Assist v16.2.0 by EvokerUniverse, retaining its GPL-3.0-onl
 license and MiCTS-derived invocation path. See CHANGELOG.md and docs/ARCHITECTURE.md
 for modifications. ColorGoogle is not an official OPPO or Google product.
 Brand names and artwork do not imply endorsement or grant trademark rights.
+
+## ColorCamera modifications
+
+Copyright (C) 2026 joeyandu and contributors.
+ColorCamera is a separate GPL-3.0-only application derived from this project's
+camera shortcut and privileged-agent code. It retains upstream attribution but
+does not package Google assistant, MiCTS invocation, Shizuku or wireless ADB code.
+Its original geometric camera icon is project artwork. It is not an official
+OPPO or Google product. See docs/COLORCAMERA.md for behavior and limitations.

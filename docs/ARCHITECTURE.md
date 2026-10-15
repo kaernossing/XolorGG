@@ -75,3 +75,21 @@ debugging, survive force-stop as a guarantee, or bypass device unlock.
 
 See [CHANGELOG](../CHANGELOG.md) and [validation](VALIDATION.md). Public documentation
 must not turn historical device evidence into an unqualified cross-device guarantee.
+
+## Standalone ColorCamera (1.0.0 preview)
+
+`camera` builds a separate application; `shortcut-core` is a small Android library
+used by both APKs. Java classes retain the upstream package for package-private
+sharing, but the Android application ID and bridge authority are independent.
+CameraBridge is protected by DUMP and validates the shell UID; agent RPC validates
+the app/shell UID and connection generation. No general launch endpoint is exposed.
+A single app process owns its saved run intent. The service reports persistent
+user intent; only the shell agent performs interception. App death invalidates
+queued work and disconnects the controller before reconnect; explicit stop is
+durable and stops the agent after reconnect as well.
+Both new agents hold `/data/local/tmp/color-shortcut-controller.lock` for their
+process lifetime and reject the other known process, including old versions.
+Controller dump inspection is fail-closed; teardown only clears the recorded
+owner. External tools do not honor this cooperative lock, and Android offers no
+atomic controller compare-and-swap; do not run competing monitors.
+See [ColorCamera](COLORCAMERA.md) and its separate validation matrix.

@@ -4,6 +4,13 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
+## Choose your app
+
+- **Only double-press power → camera:** [ColorCamera setup](docs/COLORCAMERA.md) · [1.0.0 preview APK](https://github.com/joeyandu/ColorGoogle/releases/tag/colorcamera-v1.0.0). Independent package; no Google apps or log-reading permission. Standalone-device tests pending.
+- **Gemini, Circle to Search and Google Search:** ColorGoogle, documented below. ColorGoogle 16.3.0 remains the published stable release; newer source changes are described separately.
+- Install both if desired, but **turn off one main service before activating the other**. They cannot own the system activity interceptor together.
+
+
 **Bring Gemini and Circle to Search to familiar ColorOS controls.** Hold the power button—even with the screen off—to open Gemini; hold the bottom gesture bar for Circle to Search; redirect the existing launcher search button to Google Search.
 
 [Download 16.3.0](https://github.com/joeyandu/ColorGoogle/releases/tag/v16.3.0) · [Installation](#installation-computer-adb-recommended) · [Agent prompts](#how-to-use-with-an-agent) · [Troubleshooting](#troubleshooting) · [Changes](CHANGELOG.md)
@@ -255,3 +262,170 @@ Use **JDK 17 and Android SDK 36**. See [SIGNING.md](SIGNING.md) for debug/releas
 ColorGoogle processes trigger events locally and has no developer telemetry backend. Wireless recovery uses a phone-local ADB connection and a private, non-backed-up pairing key. Google services process requests under Google's policies. Diagnostic files can contain device details; review before sharing. See [privacy and permissions](TERMS_AND_PRIVACY.md).
 
 Contributions and device reports are welcome. Keep changes focused and preserve authorship, licenses and device-specific limits. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+### 16.3.1-rc.1: agent survival candidate (local validation)
+
+This candidate separates the privileged agent from the lifetime of the app's
+communication processes. A lost connection pauses interception and log delivery;
+the same agent reconnects with bounded intervals (1, 2, 4, 8, 16, then 30 seconds).
+Old callbacks and queued actions are invalidated. No missed wake events are replayed.
+
+**Stop all ColorGoogle features** saves the master stop intent before shutting down
+the agent, including desktop search. Starting again requires computer ADB or usable
+paired wireless ADB. System process destruction does not save a user stop intent.
+
+The app reports agent connection separately from wireless recovery availability.
+Turning off Wi-Fi, losing a network, or changing access points can disable wireless
+debugging. A running agent may survive; if it exits, cellular data cannot restart it
+through the current wireless recovery implementation. Reconnection is not permanent
+authorization and does not guarantee survival of an adbd restart or a phone reboot.
+
+The computer and in-app activation commands use `tools/activate-agent.sh` as their
+single source. Activation never stops an existing agent. After an APK update, stop
+the old agent explicitly and activate the new version; do not uninstall or clear data.
+Structural diagnostic logs are local, rotated at 128 KiB (two files per writer), and
+exclude speech, search text and pairing keys. Shell status exposes a bounded excerpt
+of the app diagnostic log for troubleshooting. This candidate is not a new verified
+device compatibility claim. Cellular-only and overnight acceptance must be recorded
+separately from build/test success.
+
+### 16.3.1-rc.2: USB reconnection candidate (local validation)
+
+On the tested Mac, O+Connect's background service logged USB control transfers
+followed by the OPPO switching to Android Accessory mode. Phone records associated
+these transitions with adbd restart and agent loss. Closing the O+Connect window
+alone does not stop its background service. Disabling its background/login services
+also affects O+Connect interoperability; save their configuration and restore them
+when needed. This is a device-specific diagnosis, not a claim that every USB plug
+or Wi-Fi change kills the agent. Recheck background items after O+Connect updates.
+
+This candidate also makes listener removal safe after a connection ends. A stale
+listener registration remains an error, and stale cleanup cannot remove a newer
+connection's listener. The master stop switch still stops all features.
+
+An **optional macOS USB recovery helper** waits for five seconds of stable USB
+connectivity and uses the canonical starter only when the master switch is on and
+no agent process exists. It never replaces a running agent, enables the master
+switch, or changes phone permissions. It checks app/agent versions and connection
+readiness, with at most three attempts per USB connection. Errors are recorded in
+rotating local logs; readiness is not proof of a physical wake gesture succeeding.
+Python 3 and ADB must already be installed. Confirm the phone serial with `adb -P
+5038 devices -l`, then run from the repository root:
+
+```sh
+python3 tools/install_usb_recovery.py install --serial YOUR_CONFIRMED_SERIAL --port 5038
+python3 tools/install_usb_recovery.py status
+# Remove the helper and its login item; diagnostic logs are retained:
+python3 tools/install_usb_recovery.py uninstall
+```
+
+The helper runs at Mac login. Its files and bounded logs are in
+`~/Library/Application Support/ColorGoogle USB Recovery/`. It supports this exact
+candidate version; reinstall the helper with the matching version after upgrading.
+It cannot recover a terminated agent while the phone is disconnected from the Mac.
+A phone authorization dialog requires user confirmation. The existing shell-only
+status provider accepts `--arg compact` for machine-readable state without log text;
+no new exported component or AIDL method is added. Long-duration cellular-only
+survival remains a separate acceptance test. No Windows recovery daemon is included.
+
+
+### 16.3.1-rc.3: Android 17 assistant diagnostics (local candidate)
+
+The tested OPPO has upgraded to ColorOS 17.0.0.104 / Android 17. Before this
+candidate was installed, the existing USB helper restarted the agent after the
+OTA reboot, and the user verified power, OEM voice, Circle to Search and desktop
+search, including unplugged operation. This is a baseline, not proof that the
+previous intermittent Google assistant failure is permanently fixed.
+
+This candidate preserves the trigger routes, invocation method and 2.5-second
+cooldown. It does not reset a healthy default-assistant connection or add an
+automatic reset/fallback route. New diagnostics include:
+
+- Local request IDs, trigger source/target, duplicate decisions, primer counts,
+  protocol results and elapsed time. Raw OEM trigger lines, speech, search text,
+  pairing keys and screen content are not written to the diagnostic files.
+- Asynchronous, bounded `voiceinteraction` samples in the shell agent. The main
+  Google service and the old session are reported separately; a surviving session
+  does not hide a missing main-service connection. Repeated markers share a sample
+  pair. Sampling times out after three seconds and retains no raw dump.
+- **Beta → Desktop search** shows agent state, assistant connection and the latest
+  request separately. **诊断说明（中文）** displays the same diagnostic explanation in
+  Chinese; the app's existing language choice is unchanged.
+- **Request accepted; UI appearance unverified** means Android accepted the call.
+  Neither that return value, `mShown=true`, nor a request sound proves Gemini was
+  visible. A sample older than 30 seconds is shown as unknown, with its age.
+
+App records remain in the watcher-owned `survival.log` and `.1`; shell records are
+`/data/local/tmp/colorgoogle-agent-events.log` and `.1`. Each file is limited to
+128 KiB. The existing protected shell `status` query includes recent app records,
+request fields and assistant samples. Request IDs correlate app stages; monotonic
+timestamps correlate those stages with shell samples. The last-request summary is
+for the current watcher process; the files retain prior sessions until rotation.
+Use the command below with your confirmed device (add `-P PORT` if your ADB server
+uses a custom port):
+
+```sh
+adb -s SERIAL shell content call --uri content://dev.evoker.homeholdcts.desktopsearch --method status
+adb -s SERIAL shell cat /data/local/tmp/colorgoogle-agent-events.log
+```
+
+Version: `16.3.1-rc.3`, code `16030003`. When installing the Mac helper for this
+candidate, pass `--version 16030003`. No public Release is created by this local
+validation. Ordinary background-process termination and an OEM `FastClear` kill
+are different tests: if the permitted termination command does not kill Google's
+assistant process, mark that test as not covered. Do not substitute force-stop,
+data clearing, memory pressure or repeated reauthorization. Natural cleanup and
+long-term recurrence remain separate acceptance items.
+
+### 16.3.1-rc.4: selectable double-press power (local candidate)
+
+Under **Beta → Double-press power**, enable **Customize double-press power** and
+choose **Google Wallet** (initial choice) or **System camera**. The new switch is
+off by default. Keep ColorOS's existing double-press wallet gesture enabled: this
+feature intercepts that exact system shortcut before its OPPO Wallet activity
+starts. It does not infer a double-press from ordinary key logs or change default
+payment/NFC settings. Turning it off restores the original system route.
+
+The camera uses OPPO's normal entry when unlocked and its secure entry when
+locked. Wallet opens its regular launcher entry and may require unlocking.
+Desktop search and double-press share one monitor with independent switches;
+another activity monitor is incompatible. The master switch and agent connection
+still govern all custom interception. An unavailable target prevents activation;
+a launch error is reported, without repeated launches or alternate intents.
+Accepted requests are not proof that the requested UI appeared.
+
+This is a local test candidate, not a public Release. Physical screen-on,
+lock-screen, screen-off and USB-disconnected checks must be recorded separately
+for both targets; do not infer support on other devices. Version code: `16030004`.
+Update the Mac helper with `--version 16030004`. Existing app data and signing
+identity are retained. English controls include a Chinese usage-help dialog.
+
+### 17.0.1: camera query optimization (local build)
+
+The double-power **System camera** option now reads the current user and resolves
+the enabled/exported OPPO camera entry through system Binder queries, instead of
+starting two shell commands on every request. Resolution remains fresh on each
+trigger. The secure-camera selection, final keyguard check, 800 ms duplicate gate
+and `am start -W` launch remain in place. Unsupported/denied queries report an
+error; there is no alternate command fallback or camera prewarming.
+
+Camera requests write bounded local `CAMERA_TIMING` records: queue, preparation,
+user/keyguard/entry queries, launch wait and total durations. Android launch
+state/timing is retained only when returned; absent values are unknown. The
+ordinal is an attempt within the agent session, not proof of cold startup. The
+system may already have woken the display before interception, so locked state
+does not distinguish a lit lock screen from a screen-off double press.
+
+Physical before/after tests have been deferred at the user's request. This build
+must not be described as a measured end-to-end speed improvement yet. Logs stay
+on the phone in the existing two-file, roughly 128 KiB per-file rotation; older
+samples are overwritten. No camera images, user content or raw launch output are
+retained by these timing records. There is no upload or scheduled monitoring.
+
+Version `17.0.1`, code `17000100`; the Mac recovery helper must use
+`--version 17000100`. Default builds use Binder queries. For a future controlled
+comparison, `-PcameraQueryMode=shell` builds `17.0.1-baseline` with the same timing
+and original queries. The baseline is archived, not installed in this run.
+Both variants share a versionCode: stop the old agent before replacement and
+reactivate afterwards, then verify the timing `mode`; a matching versionCode
+alone does not prove the active implementation. No public Release was created.

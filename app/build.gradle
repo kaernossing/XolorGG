@@ -96,8 +96,12 @@ android {
         minSdk 32
         targetSdk 36
 
-        versionCode 16030000
-        versionName "16.3.0"
+        versionCode 17000100
+        def cameraMode = providers.gradleProperty('cameraQueryMode').getOrElse('binder')
+        if (!(cameraMode in ['binder', 'shell'])) throw new GradleException('cameraQueryMode must be binder or shell')
+        versionName cameraMode == 'shell' ? "17.0.1-baseline" : "17.0.1"
+        buildConfigField 'boolean', 'CAMERA_BINDER_QUERIES', (cameraMode == 'binder').toString()
+        buildConfigField 'String', 'AGENT_START_SCRIPT', groovy.json.JsonOutput.toJson(rootProject.file('tools/activate-agent.sh').getText('UTF-8'))
     }
 
     dependenciesInfo {
@@ -162,6 +166,7 @@ android {
 
 dependencies {
     implementation project(':adbclient')
+    implementation project(':shortcut-core')
     implementation 'org.bouncycastle:bcpkix-jdk15to18:1.81'
     implementation 'org.conscrypt:conscrypt-android:2.5.3'
     testImplementation "junit:junit:4.13.2"

@@ -54,31 +54,37 @@ final class ActivationRunner {
     private Target target;
     private boolean soundEnabled;
     private GoogleReviver.PrimeLease assistantWarmupLease;
+    private String requestId = "NONE";
+    private long requestStarted;
 
     ActivationRunner(Context context) {
         this.context = context.getApplicationContext();
     }
 
-    synchronized void activateCts(int delayMs, boolean vibrate, boolean sound) {
-        activate(Target.CTS, delayMs, vibrate, sound);
+    synchronized void activateCts(String id, int delayMs, boolean vibrate, boolean sound) {
+        activate(id, Target.CTS, delayMs, vibrate, sound);
     }
 
-    synchronized void activateAssistantSession(int delayMs, boolean vibrate, boolean sound) {
-        activate(Target.ASSISTANT_SESSION, delayMs, vibrate, sound);
+    synchronized void activateAssistantSession(String id, int delayMs, boolean vibrate, boolean sound) {
+        activate(id, Target.ASSISTANT_SESSION, delayMs, vibrate, sound);
     }
 
     private synchronized void activate(
+            String id,
             Target requestedTarget,
             int requestedDelayMs,
             boolean vibrateEnabled,
             boolean soundEnabled) {
         if (active) {
+            ActivationDiagnostics.result(context, id, "BUSY_IGNORED", 0, 0, "NONE");
             Log.d(TAG, "Activation already active; duplicate ignored. target="
                     + requestedTarget);
             return;
         }
 
         active = true;
+        requestId = id;
+        requestStarted = android.os.SystemClock.elapsedRealtime();
         attempt = 0;
         target = requestedTarget;
         this.soundEnabled = soundEnabled;
@@ -122,6 +128,8 @@ final class ActivationRunner {
         Log.d(TAG, "Activation primer target=" + target
                 + " acquired=" + prime.acquired
                 + " attempted=" + prime.attempted);
+        ActivationDiagnostics.event(context, requestId, "PRIMER acquired=" + prime.acquired
+                + " attempted=" + prime.attempted);
 
         if (target == Target.ASSISTANT_SESSION) {
             handler.postDelayed(this::attemptTarget, ASSISTANT_PRIME_SETTLE_MS);
@@ -144,6 +152,9 @@ final class ActivationRunner {
                 + " attempt=" + attempt
                 + " success=" + result.success
                 + " detail=" + result.detail);
+        ActivationDiagnostics.result(context, requestId, result.success ? "ACCEPTED" : "FAILED",
+                attempt, android.os.SystemClock.elapsedRealtime() - requestStarted,
+                result.error == null ? (result.success ? "NONE" : "PROTOCOL_REJECTED") : result.error.getClass().getSimpleName());
 
         if (result.success) {
             if (soundEnabled) {
@@ -201,6 +212,8 @@ final class ActivationRunner {
     }
 
     synchronized void shutdown() {
+        if (active) ActivationDiagnostics.result(context, requestId, "CANCELLED", attempt,
+                android.os.SystemClock.elapsedRealtime() - requestStarted, "SERVICE_STOPPED");
         handler.removeCallbacksAndMessages(null);
         closeAssistantWarmupLease();
         active = false;

@@ -31,6 +31,7 @@ final class WirelessRecovery {
     private volatile String status = "Not enabled";
     private volatile boolean busy;
     private boolean running, registered, pairingMode;
+    private String lastEnvironment = "";
     private volatile int generation;
     private int port;
     private NsdManager.DiscoveryListener discovery;
@@ -93,7 +94,7 @@ final class WirelessRecovery {
         return agent != null && agent.asBinder().isBinderAlive();
     }
     private void setStatus(String value) {
-        if (!value.equals(status)) { status = value; Log.i(TAG, value); }
+        if (!value.equals(status)) { status = value; Log.i(TAG, value); AgentDiagnostics.app(context, "RECOVERY_STATUS " + value); }
     }
     private void observe(boolean enabled) {
         if (enabled == registered) return;
@@ -111,19 +112,28 @@ final class WirelessRecovery {
         main.removeCallbacks(retry);
         if (pairingMode) return;
         boolean enabled = prefs.getBoolean("enabled", false);
-        observe(enabled && running);
+        observe(running);
+        boolean wireless = Settings.Global.getInt(context.getContentResolver(), "adb_wifi_enabled", 0) == 1;
+        ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
+        NetworkCapabilities caps = cm.getNetworkCapabilities(cm.getActiveNetwork());
+        boolean wifi = caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+        String environment = "wifi=" + wifi + " wirelessDebugging=" + wireless;
+        if (!environment.equals(lastEnvironment)) { lastEnvironment = environment; AgentDiagnostics.app(context, "NETWORK " + environment); }
         if (!enabled || !running) {
             stopDiscovery(); setStatus(!enabled ? "Automatic recovery disabled" : "Main service stopped; automatic activation is disabled"); return;
         }
         if (busy) return;
         if (!prefs.getBoolean("paired", false)) { stopDiscovery(); setStatus("Pair with wireless debugging first"); return; }
-        if (online()) { retries.reset(); stopDiscovery(); setStatus("Agent connected · Automatic recovery ready"); return; }
-        if (Settings.Global.getInt(context.getContentResolver(), "adb_wifi_enabled", 0) != 1) {
+        if (online()) {
+            retries.reset(); stopDiscovery();
+            setStatus(wireless && wifi ? "Agent connected · Wireless recovery conditions available"
+                    : "Agent connected · Cannot recover after exit: " + (!wireless ? "wireless debugging is off" : "Wi-Fi is unavailable"));
+            return;
+        }
+        if (!wireless) {
             stopDiscovery(); setStatus("Agent stopped; enable system wireless debugging"); return;
         }
-        ConnectivityManager cm = context.getSystemService(ConnectivityManager.class);
-        NetworkCapabilities caps = cm.getNetworkCapabilities(cm.getActiveNetwork());
-        if (caps == null || !caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+        if (!wifi) {
             stopDiscovery(); setStatus("Waiting for Wi-Fi; local wireless debugging is unavailable"); return;
         }
         if (discovery == null) startDiscovery();
@@ -212,7 +222,7 @@ final class WirelessRecovery {
             String failure = null;
             try (WirelessAdbIdentity identity = new WirelessAdbIdentity(context)) {
                 if (!identity.connect("127.0.0.1", connectPort)) throw new java.io.IOException("ADB connection rejected");
-                if (token != generation || online()) return;
+                if (token != generation || online() || !RunIntent.localEnabled(context)) return;
                 try (AdbStream stream = identity.openStream("shell:" + DesktopSearchActivation.START_SCRIPT)) {
                     byte[] buffer = new byte[4096]; int count, total = 0;
                     while ((count = stream.read(buffer, 0, buffer.length)) >= 0) {

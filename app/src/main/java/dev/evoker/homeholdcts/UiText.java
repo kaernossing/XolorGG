@@ -33,9 +33,9 @@ final class UiText {
             case "About": return "Giới thiệu";
             case "Accept Terms & Privacy before running.": return "Hãy đồng ý Điều khoản & Quyền riêng tư trước khi chạy.";
             case "Activation delay": return "Độ trễ kích hoạt";
-            case "Activation feedback uses bundled local PCM audio cues after a successful request. No activation audio is downloaded or streamed.": return "Phản hồi kích hoạt dùng các âm thanh PCM cục bộ được đóng gói sẵn sau khi yêu cầu thành công. Ứng dụng không tải xuống hoặc phát trực tuyến âm thanh kích hoạt.";
-            case "Activation sound": return "Âm thanh kích hoạt";
-            case "Adjust activation delay, haptic feedback and the local success sound used by Circle to Search and the Assistant session. Changes apply immediately.": return "Chỉnh độ trễ, rung và âm báo khi kích hoạt. Áp dụng ngay.";
+            case "Activation feedback uses bundled local PCM audio cues after an accepted request; this does not verify that the Google UI appeared. No activation audio is downloaded or streamed.": return "Phản hồi kích hoạt dùng các âm thanh PCM cục bộ được đóng gói sẵn sau khi yêu cầu thành công. Ứng dụng không tải xuống hoặc phát trực tuyến âm thanh kích hoạt.";
+            case "Request sound": return "Âm thanh kích hoạt";
+            case "Adjust activation delay, haptic feedback and the request acknowledgement sound used by Circle to Search and the Assistant session. Changes apply immediately.": return "Chỉnh độ trễ, rung và âm báo khi kích hoạt. Áp dụng ngay.";
             case "Advanced": return "Nâng cao";
             case "After reboot, if Android does not show the device-log access confirmation, open ColorGoogle once.": return "Sau khi khởi động lại, nếu Android không hiện hộp thoại xác nhận quyền truy cập nhật ký thiết bị, hãy mở ColorGoogle một lần.";
             case "Agree & continue": return "Đồng ý & tiếp tục";
@@ -368,7 +368,7 @@ final class UiText {
             case "max 3 seconds": return "tối đa 3 giây";
             case "Custom sound": return "Âm thanh tùy chọn";
             case "Importing activation sound…": return "Đang nhập âm thanh kích hoạt…";
-            case "Activation sound saved · max 3 seconds": return "Đã lưu âm thanh kích hoạt · tối đa 3 giây";
+            case "Request sound saved · max 3 seconds": return "Đã lưu âm thanh kích hoạt · tối đa 3 giây";
             case "Could not import activation sound": return "Không thể nhập âm thanh kích hoạt";
             case "Audio picker unavailable": return "Không thể mở trình chọn âm thanh";
             case "Assistant Settings": return "Cài đặt Assistant";
@@ -417,9 +417,9 @@ final class UiText {
             case "About": return "Tentang";
             case "Accept Terms & Privacy before running.": return "Setujui Ketentuan & Privasi sebelum menjalankan.";
             case "Activation delay": return "Penundaan aktivasi";
-            case "Activation feedback uses bundled local PCM audio cues after a successful request. No activation audio is downloaded or streamed.": return "Umpan balik aktivasi menggunakan isyarat audio PCM lokal yang disertakan setelah permintaan berhasil. Tidak ada audio aktivasi yang diunduh atau dialirkan.";
-            case "Activation sound": return "Suara aktivasi";
-            case "Adjust activation delay, haptic feedback and the local success sound used by Circle to Search and the Assistant session. Changes apply immediately.": return "Atur penundaan aktivasi, umpan balik haptik, dan suara sukses lokal yang digunakan oleh Circle to Search dan sesi Asisten. Perubahan langsung diterapkan.";
+            case "Activation feedback uses bundled local PCM audio cues after an accepted request; this does not verify that the Google UI appeared. No activation audio is downloaded or streamed.": return "Umpan balik aktivasi menggunakan isyarat audio PCM lokal yang disertakan setelah permintaan berhasil. Tidak ada audio aktivasi yang diunduh atau dialirkan.";
+            case "Request sound": return "Suara aktivasi";
+            case "Adjust activation delay, haptic feedback and the request acknowledgement sound used by Circle to Search and the Assistant session. Changes apply immediately.": return "Atur penundaan aktivasi, umpan balik haptik, dan suara sukses lokal yang digunakan oleh Circle to Search dan sesi Asisten. Perubahan langsung diterapkan.";
             case "Advanced": return "Lanjutan";
             case "After reboot, if Android does not show the device-log access confirmation, open ColorGoogle once.": return "Setelah reboot, jika Android tidak menampilkan konfirmasi akses log perangkat, buka ColorGoogle sekali.";
             case "Agree & continue": return "Setuju & lanjutkan";
@@ -728,7 +728,7 @@ final class UiText {
             case "max 3 seconds": return "maks. 3 detik";
             case "Custom sound": return "Suara kustom";
             case "Importing activation sound…": return "Mengimpor suara aktivasi…";
-            case "Activation sound saved · max 3 seconds": return "Suara aktivasi disimpan · maks. 3 detik";
+            case "Request sound saved · max 3 seconds": return "Suara aktivasi disimpan · maks. 3 detik";
             case "Could not import activation sound": return "Tidak dapat mengimpor suara aktivasi";
             case "Audio picker unavailable": return "Pemilih audio tidak tersedia";
             case "Assistant Settings": return "Pengaturan Assistant";
@@ -762,9 +762,9 @@ final class UiText {
             case "About": return "เกี่ยวกับ";
             case "Accept Terms & Privacy before running.": return "ยอมรับข้อกำหนดและความเป็นส่วนตัวก่อนเริ่มใช้งาน";
             case "Activation delay": return "หน่วงเวลาการเรียกใช้";
-            case "Activation feedback uses bundled local PCM audio cues after a successful request. No activation audio is downloaded or streamed.": return "การตอบสนองเมื่อเรียกใช้ใช้เสียง PCM ภายในเครื่องที่รวมมากับแอปหลังคำขอสำเร็จ ไม่มีการดาวน์โหลดหรือสตรีมเสียงสำหรับการเรียกใช้";
-            case "Activation sound": return "เสียงเมื่อเรียกใช้";
-            case "Adjust activation delay, haptic feedback and the local success sound used by Circle to Search and the Assistant session. Changes apply immediately.": return "ปรับหน่วงเวลาการเรียกใช้ การตอบสนองแบบสั่น และเสียงยืนยันภายในเครื่องที่ใช้กับ Circle to Search และเซสชัน Assistant การเปลี่ยนแปลงมีผลทันที";
+            case "Activation feedback uses bundled local PCM audio cues after an accepted request; this does not verify that the Google UI appeared. No activation audio is downloaded or streamed.": return "การตอบสนองเมื่อเรียกใช้ใช้เสียง PCM ภายในเครื่องที่รวมมากับแอปหลังคำขอสำเร็จ ไม่มีการดาวน์โหลดหรือสตรีมเสียงสำหรับการเรียกใช้";
+            case "Request sound": return "เสียงเมื่อเรียกใช้";
+            case "Adjust activation delay, haptic feedback and the request acknowledgement sound used by Circle to Search and the Assistant session. Changes apply immediately.": return "ปรับหน่วงเวลาการเรียกใช้ การตอบสนองแบบสั่น และเสียงยืนยันภายในเครื่องที่ใช้กับ Circle to Search และเซสชัน Assistant การเปลี่ยนแปลงมีผลทันที";
             case "Advanced": return "ขั้นสูง";
             case "After reboot, if Android does not show the device-log access confirmation, open ColorGoogle once.": return "หลังรีบูต หาก Android ไม่แสดงการยืนยันสิทธิ์เข้าถึงบันทึกอุปกรณ์ ให้เปิด ColorGoogle หนึ่งครั้ง";
             case "Agree & continue": return "ยอมรับและดำเนินการต่อ";
@@ -1073,7 +1073,7 @@ final class UiText {
             case "max 3 seconds": return "สูงสุด 3 วินาที";
             case "Custom sound": return "เสียงกำหนดเอง";
             case "Importing activation sound…": return "กำลังนำเข้าเสียงเปิดใช้งาน…";
-            case "Activation sound saved · max 3 seconds": return "บันทึกเสียงเปิดใช้งานแล้ว · สูงสุด 3 วินาที";
+            case "Request sound saved · max 3 seconds": return "บันทึกเสียงเปิดใช้งานแล้ว · สูงสุด 3 วินาที";
             case "Could not import activation sound": return "ไม่สามารถนำเข้าเสียงเปิดใช้งานได้";
             case "Audio picker unavailable": return "ไม่สามารถเปิดตัวเลือกเสียงได้";
             case "Assistant Settings": return "การตั้งค่า Assistant";

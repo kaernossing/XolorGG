@@ -395,7 +395,14 @@ public class HomeHoldService extends Service {
         if (instance == this) instance = null;
         adbLogGeneration++;
         if (adbLogAgent != null) {
-            try { adbLogAgent.setWakeListener(null); } catch (RemoteException ignored) { }
+            try { adbLogAgent.setWakeListener(null); }
+            catch (RemoteException e) {
+                AgentDiagnostics.app(this, "LISTENER_CLEANUP connection_ended");
+            } catch (IllegalStateException e) {
+                // An old installed agent can still reject cleanup during an APK upgrade.
+                if (!"Stale agent connection".equals(e.getMessage())) throw e;
+                AgentDiagnostics.app(this, "LISTENER_CLEANUP stale_legacy_connection");
+            }
             adbLogAgent = null;
         }
 
@@ -436,14 +443,7 @@ public class HomeHoldService extends Service {
 
     private void stopWatcherFromCommand() {
         running = false;
-        getSharedPreferences(
-                MainActivity.PREFS,
-                MODE_PRIVATE)
-                .edit()
-                .putBoolean(
-                        MainActivity.PREF_ENABLED,
-                        false)
-                .commit();
+        RunIntent.setLocal(this, false);
         RestartReceiver.cancelRestart(this);
         WatcherRescueJobService.cancelScheduled(this);
         stopSelf();
@@ -455,9 +455,7 @@ public class HomeHoldService extends Service {
                         MainActivity.PREFS,
                         MODE_PRIVATE);
 
-        return prefs.getBoolean(
-                        MainActivity.PREF_ENABLED,
-                        false)
+        return RunIntent.localEnabled(this)
                 && prefs.getBoolean(
                         MainActivity.PREF_TERMS_ACCEPTED,
                         false);
@@ -714,10 +712,16 @@ public class HomeHoldService extends Service {
         synchronized (triggerLock) {
             TriggerClassifier.Source source = triggerClassifier.accept(
                     line, SystemClock.elapsedRealtime());
-            if (source == TriggerClassifier.Source.NONE) return;
+            if (source == TriggerClassifier.Source.NONE) {
+                if (triggerClassifier.decision() != TriggerClassifier.Decision.IGNORED)
+                    ActivationDiagnostics.trigger(this, triggerClassifier.observedSource(), "NONE", triggerClassifier.decision());
+                return;
+            }
             final boolean targetAssistant = TriggerClassifier.targetsAssistant(
                     source, runtimePowerGemini, runtimeVoiceWakeAssistant,
                     runtimeSwapCtsAssistant);
+            String requestId = ActivationDiagnostics.trigger(this, source,
+                    targetAssistant ? "ASSISTANT" : "CTS", triggerClassifier.decision());
 
             Log.i(TAG,
                     "Trigger classified source=" + source
@@ -727,16 +731,18 @@ public class HomeHoldService extends Service {
             if (activationRunner != null) {
                 if (targetAssistant) {
                     activationRunner.activateAssistantSession(
+                            requestId,
                             runtimeDelayMs,
                             runtimeVibrate,
                             runtimeSound);
                 } else {
                     activationRunner.activateCts(
+                            requestId,
                             runtimeDelayMs,
                             runtimeVibrate,
                             runtimeSound);
                 }
-            }
+            } else ActivationDiagnostics.result(this, requestId, "UNAVAILABLE", 0, 0, "RUNNER_ABSENT");
         }
     }
 
