@@ -70,20 +70,17 @@ final class SettingsNavigator {
     }
 
     static void assistantSettings(Activity activity) {
-        // ColorOS 17 may briefly launch and immediately close the non-public
-        // Settings$ManageAssistActivity. Use exported public Settings actions.
-        // Open the default-apps screen first; the user can select Digital assistant.
-        Intent defaults = new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS);
-        defaults.setPackage("com.android.settings");
+        // Confirmed on the target ColorOS 17 device: the public voice-input
+        // Settings action opens the assistant picker. Other Settings pages may
+        // accept startActivity() but close immediately without throwing.
         try {
-            activity.startActivity(defaults);
+            activity.startActivity(new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS));
             return;
         } catch (RuntimeException ignored) {
-            // Some ColorOS builds do not export this activity.
         }
 
         try {
-            activity.startActivity(new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS));
+            activity.startActivity(new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS));
             return;
         } catch (RuntimeException ignored) {
         }
