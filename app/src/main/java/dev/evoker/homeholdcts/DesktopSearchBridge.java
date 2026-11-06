@@ -11,7 +11,7 @@ import android.os.IBinder;
 
 /** Shell-only bootstrap. Normal apps cannot install a privileged Binder here. */
 public final class DesktopSearchBridge extends ContentProvider {
-    static final String AUTHORITY = "dev.evoker.homeholdcts.desktopsearch";
+    static final String AUTHORITY = "com.kaernossing.xolorgg.desktopsearch";
     static final String PREF = "desktop_search_google";
     static volatile IDesktopSearchAgent agent;
     private static IBinder lastController;
