@@ -16,8 +16,15 @@ final class TriggerClassifier {
     private long lastPowerMarker = -1L;
     private long lastVoiceMarker = -1L;
 
-    // Diagnostic only: a Breeno Touch activity launch is not proof of a long press.\n    static boolean isBreenoTouchRoute(String line) {\n        return line != null && line.contains("com.coloros.colordirectservice")\n                && line.contains("CollectInfoActivity");\n    }\n\n    static boolean isCandidateLine(String line) {
-        return line != null && (isBreenoTouchRoute(line)\n                || line.contains("Detect long press KEYCODE_POWER")
+    // Diagnostic only: a Breeno Touch activity launch is not proof of a long press.
+    static boolean isBreenoTouchRoute(String line) {
+        return line != null && line.contains("com.coloros.colordirectservice")
+                && line.contains("CollectInfoActivity");
+    }
+
+    static boolean isCandidateLine(String line) {
+        return line != null && (isBreenoTouchRoute(line)
+                || line.contains("Detect long press KEYCODE_POWER")
                 || line.contains("PowerKey:onLongPress")
                 || line.contains("wakeUpSpeechAssist caller_package: com.oplus.ovoicemanager.wakeup")
                 || (line.contains("act=heytap.intent.action.ACTIVATE_SPEECH_ASSIST")
