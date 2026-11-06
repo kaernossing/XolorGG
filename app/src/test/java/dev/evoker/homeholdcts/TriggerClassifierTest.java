@@ -69,7 +69,14 @@ public class TriggerClassifierTest {
         assertEquals(NONE,c.accept("act=heytap.intent.action.ACTIVATE_SPEECH_ASSIST",0));
         assertEquals(NONE,c.accept("PowerKey:onShortPress",0));
     }
-    @Test public void breenoTouchRouteIsDiagnosticOnly() {\n        String line = "ActivityTaskManager: START u0 {cmp=com.coloros.colordirectservice/com.coloros.directui.ui.CollectInfoActivity}";\n        assertTrue(TriggerClassifier.isBreenoTouchRoute(line));\n        assertTrue(TriggerClassifier.isCandidateLine(line));\n        assertEquals(NONE, new TriggerClassifier().accept(line, 1000));\n        assertFalse(TriggerClassifier.isBreenoTouchRoute("NavigationBarHandle: send down event"));\n    }\n    @Test public void preferencesAndSwapPreserved() {
+    @Test public void breenoTouchRouteIsDiagnosticOnly() {
+        String line = "ActivityTaskManager: START u0 {cmp=com.coloros.colordirectservice/com.coloros.directui.ui.CollectInfoActivity}";
+        assertTrue(TriggerClassifier.isBreenoTouchRoute(line));
+        assertTrue(TriggerClassifier.isCandidateLine(line));
+        assertEquals(NONE, new TriggerClassifier().accept(line, 1000));
+        assertFalse(TriggerClassifier.isBreenoTouchRoute("NavigationBarHandle: send down event"));
+    }
+    @Test public void preferencesAndSwapPreserved() {
         assertTrue(TriggerClassifier.targetsAssistant(POWER,true,false,false));
         assertFalse(TriggerClassifier.targetsAssistant(HOME_GESTURE,true,false,false));
         assertFalse(TriggerClassifier.targetsAssistant(POWER,false,false,false));
