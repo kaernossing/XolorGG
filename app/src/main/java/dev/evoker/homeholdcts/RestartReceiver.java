@@ -22,7 +22,7 @@ import android.os.SystemClock;
 public class RestartReceiver extends BroadcastReceiver {
 
     public static final String ACTION_RESTART =
-            "dev.evoker.homeholdcts.RESTART";
+            "com.kaernossing.xolorgg.RESTART";
 
     private static final int REQUEST_CODE = 22;
     private static final long LEASE_TIMEOUT_MS = 4L * 60L * 1000L;
