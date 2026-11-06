@@ -112,7 +112,7 @@ public class MainActivity extends Activity {
     private static final String PREF_SETUP_UI_FINISHED = "stable_ui_setup_finished";
     private static final String STATE_SETUP_PAGE = "setup_page";
     private static final String EXTRA_RECREATE_SETUP_PAGE =
-            "dev.evoker.homeholdcts.extra.RECREATE_SETUP_PAGE";
+            "com.kaernossing.xolorgg.extra.RECREATE_SETUP_PAGE";
 
     private static final int SETUP_PAGE_PRIVILEGED = 0;
     private static final int SETUP_PAGE_GESTURE = 1;
@@ -128,7 +128,7 @@ public class MainActivity extends Activity {
     private static final int TAB_BETA = 5;
     private static final String STATE_SELECTED_TAB = "selected_tab";
     private static final String EXTRA_RECREATE_TAB =
-            "dev.evoker.homeholdcts.extra.RECREATE_TAB";
+            "com.kaernossing.xolorgg.extra.RECREATE_TAB";
 
     // One visual grid for every tab.  These values deliberately live beside
     // the UI-only constants: changing them must never affect setup or watcher
