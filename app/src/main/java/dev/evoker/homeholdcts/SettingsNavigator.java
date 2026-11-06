@@ -70,37 +70,30 @@ final class SettingsNavigator {
     }
 
     static void assistantSettings(Activity activity) {
-        // The AOSP/ColorOS digital-assistant picker. This is the same Settings
-        // surface exposed as "Assist & voice input" on many Android builds.
-        Intent direct = new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS);
-        direct.setComponent(new ComponentName(
-                "com.android.settings",
-                "com.android.settings.Settings$ManageAssistActivity"));
-        direct.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        // ColorOS 17 may briefly launch and immediately close the non-public
+        // Settings$ManageAssistActivity. Use exported public Settings actions.
+        // Open the default-apps screen first; the user can select Digital assistant.
+        Intent defaults = new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS);
+        defaults.setPackage("com.android.settings");
         try {
-            activity.startActivity(direct);
+            activity.startActivity(defaults);
             return;
-        } catch (Throwable ignored) {
-        }
-
-        Intent voiceInput = new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS);
-        voiceInput.setPackage("com.android.settings");
-        try {
-            activity.startActivity(voiceInput);
-            return;
-        } catch (Throwable ignored) {
+        } catch (RuntimeException ignored) {
+            // Some ColorOS builds do not export this activity.
         }
 
         try {
-            activity.startActivity(new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS));
+            activity.startActivity(new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS));
             return;
-        } catch (Throwable ignored) {
+        } catch (RuntimeException ignored) {
         }
 
         try {
             activity.startActivity(new Intent(Settings.ACTION_SETTINGS));
-        } catch (Throwable t) {
-            Toast.makeText(activity, UiText.tr(activity, "Settings page unavailable"), Toast.LENGTH_SHORT).show();
+        } catch (RuntimeException t) {
+            Toast.makeText(activity,
+                    UiText.tr(activity, "Settings page unavailable"),
+                    Toast.LENGTH_SHORT).show();
         }
     }
 
