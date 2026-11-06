@@ -214,7 +214,7 @@ final class DirectLogdReader implements Closeable {
     }
 
     private static boolean isRelevantTag(String tag) {
-        return "ActivityManager".equals(tag)
+        return "ActivityManager".equals(tag)\n                || "ActivityTaskManager".equals(tag)
                 || "KEYLOG_SingleKeyGesture".equals(tag)
                 || "KEYLOG_SinglePowerKeyMonitor".equals(tag)
                 || "OVMS-OVMS_StartSpeechAssist".equals(tag)
