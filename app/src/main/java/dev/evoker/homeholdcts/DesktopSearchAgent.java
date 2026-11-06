@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 
 /** ADB shell entry point, loaded from this signed APK; never runs as an app service. */
 public final class DesktopSearchAgent {
-    private static final String SELF = "dev.evoker.homeholdcts";
+    private static final String SELF = "com.kaernossing.xolorgg";
     private static final String DESC = "android.app.IActivityController";
     private final java.util.concurrent.ThreadPoolExecutor launches = new java.util.concurrent.ThreadPoolExecutor(
             1, 1, 0L, TimeUnit.MILLISECONDS, new java.util.concurrent.LinkedBlockingQueue<>());
