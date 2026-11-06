@@ -710,7 +710,10 @@ public class HomeHoldService extends Service {
         }
 
         synchronized (triggerLock) {
-            if (TriggerClassifier.isBreenoTouchRoute(line)) {\n                Log.i(TAG, "Breeno Touch route observed; not a confirmed gesture trigger");\n            }\n            TriggerClassifier.Source source = triggerClassifier.accept(
+            if (TriggerClassifier.isBreenoTouchRoute(line)) {
+                Log.i(TAG, "Breeno Touch route observed; not a confirmed gesture trigger");
+            }
+            TriggerClassifier.Source source = triggerClassifier.accept(
                     line, SystemClock.elapsedRealtime());
             if (source == TriggerClassifier.Source.NONE) {
                 if (triggerClassifier.decision() != TriggerClassifier.Decision.IGNORED)
