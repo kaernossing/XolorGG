@@ -263,7 +263,7 @@ private final ServiceConnection watcherConnection =
     private MaterialSwitch desktopSearchToggle;
     private TextView desktopSearchStatus;
     private TextView assistantDiagnosticsStatus;
-    private String assistantDiagnosticsChinese = "尚未读取诊断状态";
+    private String assistantDiagnosticsChinese = "Diagnostics not yet available";
     private MaterialSwitch wirelessToggle;
     private TextView wirelessStatus;
     private boolean wirelessRendering;
@@ -1402,10 +1402,10 @@ protected void onStop() {
         body.addView(doublePowerChoices);
         doublePowerStatus = supporting("Checking the ADB agent…");
         body.addView(doublePowerStatus, margins(0, 6, 0, 10));
-        MaterialButton help = compactButton("使用说明（中文）");
-        help.setOnClickListener(v -> new MaterialAlertDialogBuilder(this).setTitle("双击电源键")
-                .setMessage("开启后选择 Google 钱包或系统相机，亮屏、锁屏和熄屏共用此选择。系统双击电源键的钱包快捷功能需要保持开启。关闭此开关恢复系统原行为。\n\n需要 ADB 代理连接；锁屏时使用安全相机入口，钱包遵守系统解锁要求。不修改默认支付应用。请求被接受不等于界面已经出现。\n\n代理失联时停止拦截，不自动重复启动目标应用。")
-                .setPositiveButton("确定", null).show());
+        MaterialButton help = compactButton("Usage guide");
+        help.setOnClickListener(v -> new MaterialAlertDialogBuilder(this).setTitle("Double-press power")
+                .setMessage("Choose Google Wallet or the system camera for double-press power, including on the lock screen. Keep the ColorOS wallet shortcut enabled. Turning this switch off restores system behavior.\n\nRequires the ADB agent. Camera uses the secure lock-screen entry point; Wallet may require unlocking. This does not change your default payment app. An accepted request does not prove the app appeared.\n\nIf the agent disconnects, interception stops without repeated launches.")
+                .setPositiveButton("OK", null).show());
         body.addView(help);
         card.addView(body);
         return card;
@@ -1485,10 +1485,10 @@ protected void onStop() {
         body.addView(desktopSearchStatus, margins(0, 6, 0, 10));
         assistantDiagnosticsStatus = supporting("Reading assistant diagnostics…");
         body.addView(assistantDiagnosticsStatus, margins(0, 6, 0, 10));
-        MaterialButton diagnosticChinese = compactButton("诊断说明（中文）");
+        MaterialButton diagnosticChinese = compactButton("Diagnostics guide");
         diagnosticChinese.setOnClickListener(v -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                .setTitle("助手诊断").setMessage(assistantDiagnosticsChinese)
-                .setPositiveButton("确定", null).show());
+                .setTitle("Assistant diagnostics").setMessage(assistantDiagnosticsChinese)
+                .setPositiveButton("OK", null).show());
         body.addView(diagnosticChinese);
         body.addView(supporting("The ADB agent also listens for wake triggers and can run after USB is disconnected. This option controls desktop search while the master service is on. Stop all features exits the agent. Restart requires ADB or available wireless recovery. Do not run another activity monitor at the same time."));
         MaterialButton command = compactButton("Copy ADB activation command");
@@ -1624,7 +1624,7 @@ protected void onStop() {
                     assistantState.getLong("assistantSampleAgeMs", -1),
                     requestState.getString("requestResult", "UNKNOWN"), requestState.getString("requestTarget", ""),
                     assistantState.getString("assistantSampleReason", "UNAVAILABLE"));
-            final String assistantChinese = DiagnosticSummary.render(true,
+            final String assistantChinese = DiagnosticSummary.render(false,
                     assistantState.getString("assistantConnection", "UNKNOWN"),
                     assistantState.getLong("assistantSampleAgeMs", -1),
                     requestState.getString("requestResult", "UNKNOWN"), requestState.getString("requestTarget", ""),
