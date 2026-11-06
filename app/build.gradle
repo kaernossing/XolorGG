@@ -92,7 +92,7 @@ android {
     compileSdk 36
 
     defaultConfig {
-        applicationId "dev.evoker.homeholdcts"
+        applicationId "com.kaernossing.xolorgg"
         minSdk 32
         targetSdk 36
 
