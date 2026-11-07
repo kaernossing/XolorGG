@@ -24,12 +24,14 @@ final class GeminiLiveShell {
             "\\{[0-9a-fA-F]+\\s+(\\S+)\\s+\\S+\\s+"
             + "(-?\\d+),(-?\\d+)-(-?\\d+),(-?\\d+)");
     private static final int MAX_OBSERVATIONS = 24;
+    // Gemini view dumps can exceed 160 KB on newer Google app builds.
+    private static final int MAX_VIEW_DUMP_BYTES = 2 * 1024 * 1024;
 
     private GeminiLiveShell() {}
 
     static boolean launch() throws Exception {
         if (ShellCamera.locked()) return false;
-        String launch = run(6000, 8192, "/system/bin/am", "start",
+        String launch = runStage("GEMINI_OPEN", 6000, 8192, "/system/bin/am", "start",
                 "-n", GEMINI_ENTRY);
         if (launch.contains("Error:") || launch.contains("Exception")) {
             throw new IllegalStateException("Gemini entry activity unavailable");
@@ -40,7 +42,7 @@ final class GeminiLiveShell {
         for (int n = 0; n < MAX_OBSERVATIONS; n++) {
             SystemClock.sleep(250);
             if (ShellCamera.locked()) return false;
-            String dump = run(2700, 160000, "/system/bin/dumpsys",
+            String dump = runStage("VIEW_DUMP", 4000, MAX_VIEW_DUMP_BYTES, "/system/bin/dumpsys",
                     "activity", GEMINI_VIEW);
             int[] position = findLiveButton(dump);
             if (position == null) {
@@ -58,7 +60,7 @@ final class GeminiLiveShell {
             // Allow the button to settle after Gemini's entry animation.
             if (stable < 3) continue;
             if (ShellCamera.locked()) return false;
-            run(2500, 1024, "/system/bin/input", "tap",
+            runStage("LIVE_TAP", 2500, 1024, "/system/bin/input", "tap",
                     Integer.toString(position[0]),
                     Integer.toString(position[1]));
             // A successful tap may still be ignored by Gemini; do not repeat
@@ -106,8 +108,31 @@ final class GeminiLiveShell {
         return null;
     }
 
-    private static String run(int timeout, int cap, String... command) throws Exception {
-        return BoundedDiagnosticCommand.run(timeout, cap, command);
+    /**
+     * Extract only a safe structural error code; never expose dumpsys output
+     * or arbitrary command text in the UI diagnostics.
+     */
+    static String failureCode(String stage, Throwable error) {
+        Throwable cause = error;
+        for (int i = 0; i < 8 && cause != null && cause.getCause() != null
+                && cause.getCause() != cause; i++) {
+            cause = cause.getCause();
+        }
+        if (cause == null) return stage + "_UNKNOWN";
+        String detail = cause.getMessage();
+        if (detail == null || !detail.matches("[A-Z_0-9]{3,64}")) {
+            detail = cause.getClass().getSimpleName();
+        }
+        return stage + "_" + detail;
+    }
+
+    private static String runStage(String stage, int timeout, int cap,
+            String... command) throws Exception {
+        try {
+            return BoundedDiagnosticCommand.run(timeout, cap, command);
+        } catch (Exception e) {
+            throw new IllegalStateException(failureCode(stage, e), e);
+        }
     }
 
     private static final class ViewOffset {

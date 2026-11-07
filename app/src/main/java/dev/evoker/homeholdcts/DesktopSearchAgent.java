@@ -300,7 +300,11 @@ public final class DesktopSearchAgent {
                             liveLaunchState = launched ? "LIVE_BUTTON_TAPPED" : "LIVE_BUTTON_NOT_FOUND";
                             AgentDiagnostics.shell("GEMINI_LIVE state=" + liveLaunchState);
                         } catch (Exception e) {
-                            liveLaunchState = "FAILED_" + e.getClass().getSimpleName();
+                            String code = e.getMessage();
+                            if (code == null || !code.matches("[A-Z_0-9]{3,90}")) {
+                                code = e.getClass().getSimpleName();
+                            }
+                            liveLaunchState = "FAILED_" + code;
                             AgentDiagnostics.shell("GEMINI_LIVE state=" + liveLaunchState);
                         }
                     });
