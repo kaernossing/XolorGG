@@ -89,7 +89,10 @@ final class TriggerClassifier {
         if (line == null || line.isEmpty()) return Source.NONE;
         if (line.contains("wakeUpSpeechAssist caller_package: com.oplus.ovoicemanager.wakeup")) {
             // Legacy verified marker: it already identifies the wakeup caller.
-            lastVoiceMarker = -1L;
+            // When voice routing is off, retain the marker briefly so the
+            // following SpeechService attempt is ignored rather than mistaken
+            // for a HOME_GESTURE / Circle to Search activation.
+            lastVoiceMarker = voiceWakeEnabled ? -1L : now;
             return acceptVoiceWake(now, voiceWakeEnabled);
         }
         if (isColorOs17VoiceBind(line)) {
