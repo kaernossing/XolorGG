@@ -62,7 +62,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: XolorGG-17.0.0.103.1-test-apk
+          name: XolorGG-17.0.0.103.2-test-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14

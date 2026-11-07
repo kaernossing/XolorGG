@@ -53,6 +53,7 @@ public final class DesktopSearchAgent {
     private String controllerIdentity = "";
     private volatile String error = "";
     private volatile int redirects;
+    private volatile String liveLaunchState = "IDLE";
     private volatile long lastTrigger;
     private IBinder providerBinder;
     private IBinder wakeProviderBinder;
@@ -183,6 +184,7 @@ public final class DesktopSearchAgent {
         b.putString("wakeError", wakeError);
         b.putInt("redirects", redirects);
         b.putLong("lastTrigger", lastTrigger);
+        b.putString("geminiLiveState", liveLaunchState);
         assistantDiagnostics.addTo(b);
         return b;
     }
@@ -273,6 +275,36 @@ public final class DesktopSearchAgent {
                     AgentDiagnostics.shell("DOUBLE_POWER_CONFIG_FAILED " + e.getClass().getSimpleName());
                 }
                 return status();
+            }
+            @Override public Bundle requestGeminiLive() {
+                verify();
+                Bundle out = new Bundle();
+                if (!lifecycle.dispatch(epoch)) {
+                    out.putString("reason", "AGENT_DISCONNECTED");
+                    return out;
+                }
+                try {
+                    if (keyguardLocked()) {
+                        out.putString("reason", "SCREEN_LOCKED");
+                        return out;
+                    }
+                    liveLaunchState = "QUEUED";
+                    launches.execute(() -> {
+                        if (!lifecycle.dispatch(epoch)) return;
+                        try {
+                            boolean launched = GeminiLiveShell.launch();
+                            liveLaunchState = launched ? "LIVE_REQUESTED" : "LIVE_BUTTON_NOT_FOUND";
+                            AgentDiagnostics.shell("GEMINI_LIVE state=" + liveLaunchState);
+                        } catch (Exception e) {
+                            liveLaunchState = "FAILED_" + e.getClass().getSimpleName();
+                            AgentDiagnostics.shell("GEMINI_LIVE state=" + liveLaunchState);
+                        }
+                    });
+                    out.putBoolean("queued", true);
+                } catch (RuntimeException e) {
+                    out.putString("reason", e.getClass().getSimpleName());
+                }
+                return out;
             }
             @Override public void setWakeListener(IAdbWakeListener listener) {
                 checkCaller();

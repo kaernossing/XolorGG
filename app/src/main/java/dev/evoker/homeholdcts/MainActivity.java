@@ -76,6 +76,7 @@ public class MainActivity extends Activity {
             "power_gemini_experimental";
     static final String PREF_VOICE_WAKE_ASSISTANT_EXPERIMENTAL =
             "voice_wake_assistant_experimental";
+    static final String PREF_VOICE_WAKE_GEMINI_LIVE = "voice_wake_gemini_live";
     static final String PREF_SWAP_CTS_ASSISTANT_EXPERIMENTAL =
             "swap_cts_assistant_experimental";
     static final String PREF_BETA_SLOW_ANIMATIONS =
@@ -87,6 +88,7 @@ public class MainActivity extends Activity {
     static final boolean DEFAULT_SOUND_ON_ACTIVATION = true;
     static final boolean DEFAULT_POWER_GEMINI_EXPERIMENTAL = true;
     static final boolean DEFAULT_VOICE_WAKE_ASSISTANT_EXPERIMENTAL = false;
+    static final boolean DEFAULT_VOICE_WAKE_GEMINI_LIVE = false;
     static final boolean DEFAULT_SWAP_CTS_ASSISTANT_EXPERIMENTAL = false;
     static final boolean DEFAULT_BETA_SLOW_ANIMATIONS = false;
     static final boolean DEFAULT_BETA_QUICK_SETTINGS_LOG_RECOVERY = false;
@@ -1305,6 +1307,43 @@ protected void onStop() {
             syncWatcherPrefs();
         });
         voiceBody.addView(voiceWake);
+
+        MaterialSwitch liveWake = new MaterialSwitch(this);
+        liveWake.setText("XiaoBu → Gemini Live (unlocked · beta)");
+        liveWake.setTextColor(onSurface);
+        liveWake.setChecked(getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getBoolean(PREF_VOICE_WAKE_GEMINI_LIVE, DEFAULT_VOICE_WAKE_GEMINI_LIVE));
+        liveWake.setOnCheckedChangeListener((button, checked) -> {
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .edit().putBoolean(PREF_VOICE_WAKE_GEMINI_LIVE, checked).apply();
+            syncWatcherPrefs();
+        });
+        voiceBody.addView(liveWake, margins(0, 10, 0, 4));
+        voiceBody.addView(supporting(
+                "Requires the connected ADB agent. Opens Gemini and taps its actual Live button. "
+                + "If the screen is locked or the agent is unavailable, the normal Gemini assistant remains unchanged."),
+                margins(0, 0, 0, 8));
+
+        MaterialButton testLive = compactButton("Test Gemini Live (unlocked)");
+        testLive.setOnClickListener(v -> {
+            IDesktopSearchAgent agent = DesktopSearchBridge.agent;
+            if (agent == null || !agent.asBinder().pingBinder()) {
+                Toast.makeText(this, "ADB agent not connected. Activate the agent first.",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                Bundle result = agent.requestGeminiLive();
+                Toast.makeText(this, result.getBoolean("queued")
+                        ? "Gemini Live start requested. Check the Gemini screen."
+                        : "Live unavailable: " + result.getString("reason", "unknown"),
+                        Toast.LENGTH_LONG).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Live request failed: " + e.getClass().getSimpleName(),
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+        voiceBody.addView(testLive, margins(0, 4, 0, 0));
         voice.addView(voiceBody);
         root.addView(voice, margins(0, 0, 0, 14));
 
@@ -4640,6 +4679,10 @@ private void syncWatcherPrefs() {
             prefs.getBoolean(
                     PREF_VOICE_WAKE_ASSISTANT_EXPERIMENTAL,
                     DEFAULT_VOICE_WAKE_ASSISTANT_EXPERIMENTAL));
+
+    data.putBoolean(
+            WatcherIpc.KEY_VOICE_WAKE_GEMINI_LIVE,
+            prefs.getBoolean(PREF_VOICE_WAKE_GEMINI_LIVE, DEFAULT_VOICE_WAKE_GEMINI_LIVE));
 
     data.putBoolean(
             WatcherIpc.KEY_SWAP_CTS_ASSISTANT,

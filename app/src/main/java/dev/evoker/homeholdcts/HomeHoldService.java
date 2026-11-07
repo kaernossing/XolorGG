@@ -144,6 +144,8 @@ public class HomeHoldService extends Service {
             MainActivity.DEFAULT_POWER_GEMINI_EXPERIMENTAL;
     private volatile boolean runtimeVoiceWakeAssistant =
             MainActivity.DEFAULT_VOICE_WAKE_ASSISTANT_EXPERIMENTAL;
+    private volatile boolean runtimeVoiceWakeGeminiLive =
+            MainActivity.DEFAULT_VOICE_WAKE_GEMINI_LIVE;
     private volatile boolean runtimeSwapCtsAssistant =
             MainActivity.DEFAULT_SWAP_CTS_ASSISTANT_EXPERIMENTAL;
 
@@ -505,6 +507,10 @@ public class HomeHoldService extends Service {
                         MainActivity.PREF_VOICE_WAKE_ASSISTANT_EXPERIMENTAL,
                         MainActivity.DEFAULT_VOICE_WAKE_ASSISTANT_EXPERIMENTAL);
 
+        runtimeVoiceWakeGeminiLive =
+                prefs.getBoolean(MainActivity.PREF_VOICE_WAKE_GEMINI_LIVE,
+                        MainActivity.DEFAULT_VOICE_WAKE_GEMINI_LIVE);
+
         runtimeSwapCtsAssistant =
                 prefs.getBoolean(
                         MainActivity.PREF_SWAP_CTS_ASSISTANT_EXPERIMENTAL,
@@ -541,6 +547,10 @@ public class HomeHoldService extends Service {
                 data.getBoolean(
                         WatcherIpc.KEY_VOICE_WAKE_ASSISTANT,
                         runtimeVoiceWakeAssistant);
+
+        runtimeVoiceWakeGeminiLive =
+                data.getBoolean(WatcherIpc.KEY_VOICE_WAKE_GEMINI_LIVE,
+                        runtimeVoiceWakeGeminiLive);
 
         runtimeSwapCtsAssistant =
                 data.getBoolean(
@@ -731,6 +741,16 @@ public class HomeHoldService extends Service {
                             + " target=" + (targetAssistant ? "ASSISTANT" : "CTS")
                             + " swap=" + runtimeSwapCtsAssistant);
 
+            // XiaoBu can optionally request Gemini Live, but only when the
+            // device is unlocked and the connected shell agent supports it.
+            // Never change Power or Home/CTS, and preserve the old assistant
+            // route if the agent is absent or refuses the request.
+            if (source == TriggerClassifier.Source.VOICE_WAKE
+                    && targetAssistant
+                    && runtimeVoiceWakeGeminiLive
+                    && requestGeminiLiveIfUnlocked(requestId)) {
+                return;
+            }
             if (activationRunner != null) {
                 if (targetAssistant) {
                     activationRunner.activateAssistantSession(
@@ -747,6 +767,27 @@ public class HomeHoldService extends Service {
                 }
             } else ActivationDiagnostics.result(this, requestId, "UNAVAILABLE", 0, 0, "RUNNER_ABSENT");
         }
+    }
+
+    private boolean requestGeminiLiveIfUnlocked(String requestId) {
+        try {
+            android.app.KeyguardManager keyguard =
+                    getSystemService(android.app.KeyguardManager.class);
+            if (keyguard == null || keyguard.isKeyguardLocked() || keyguard.isDeviceLocked()) {
+                return false;
+            }
+            IDesktopSearchAgent agent = WakeLogBridge.agent;
+            if (agent == null || !agent.asBinder().pingBinder()) return false;
+            Bundle response = agent.requestGeminiLive();
+            if (response != null && response.getBoolean("queued")) {
+                ActivationDiagnostics.event(this, requestId, "GEMINI_LIVE queued via shell agent");
+                return true;
+            }
+            Log.i(TAG, "Gemini Live request unavailable; falling back to assistant");
+        } catch (Exception e) {
+            Log.w(TAG, "Gemini Live request failed; falling back to assistant", e);
+        }
+        return false;
     }
 
     private void maybeAutoRecoverLogSession(String reason) {

@@ -8,4 +8,5 @@ interface IDesktopSearchAgent {
     void setWakeListener(IAdbWakeListener listener);
     void shutdown();
     Bundle setDoublePower(boolean enabled, String target);
+    Bundle requestGeminiLive();
 }
