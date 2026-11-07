@@ -301,7 +301,7 @@ public final class DesktopSearchAgent {
                         }
                     });
                     out.putBoolean("queued", true);
-                } catch (RuntimeException e) {
+                } catch (Exception e) {
                     out.putString("reason", e.getClass().getSimpleName());
                 }
                 return out;
