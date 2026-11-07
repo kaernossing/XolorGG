@@ -6,6 +6,8 @@ on:
       - fix/coloros17-gesture-trigger
   workflow_dispatch:
 
+# Stable signing is enabled through repository Actions secrets.
+
 jobs:
   build:
     runs-on: ubuntu-latest
