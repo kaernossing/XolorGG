@@ -1,0 +1,68 @@
+name: XolorGG test APK
+
+on:
+  push:
+    branches:
+      - fix/coloros17-gesture-trigger
+  workflow_dispatch:
+
+# Stable signing is enabled through repository Actions secrets.
+
+concurrency:
+  group: xolorgg-test-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout XolorGG
+        uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Use preinstalled Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" "build-tools;36.0.0"
+      - name: Assign increasing Android versionCode
+        run: echo "XOLORGG_VERSION_CODE=$((17000103 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+      - name: Build and test
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest :app:assembleDebug -PxolorggVersionCode="$XOLORGG_VERSION_CODE" --stacktrace
+      - name: Build stable-signed update APK (when signing secrets are configured)
+        env:
+          XOLORGG_KEYSTORE_BASE64: ${{ secrets.XOLORGG_KEYSTORE_BASE64 }}
+          MTA_STORE_PASSWORD: ${{ secrets.XOLORGG_STORE_PASSWORD }}
+          MTA_KEY_ALIAS: ${{ secrets.XOLORGG_KEY_ALIAS }}
+          MTA_KEY_PASSWORD: ${{ secrets.XOLORGG_KEY_PASSWORD }}
+        run: |
+          if [ -z "$XOLORGG_KEYSTORE_BASE64" ] || [ -z "$MTA_STORE_PASSWORD" ] || [ -z "$MTA_KEY_ALIAS" ] || [ -z "$MTA_KEY_PASSWORD" ]; then
+            echo "Stable signing secrets not configured; release update APK skipped."
+            exit 0
+          fi
+          printf '%s' "$XOLORGG_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/xolorgg-release.jks"
+          echo "MTA_KEYSTORE=$RUNNER_TEMP/xolorgg-release.jks" >> "$GITHUB_ENV"
+          export MTA_KEYSTORE="$RUNNER_TEMP/xolorgg-release.jks"
+          ./gradlew :app:assembleRelease -PxolorggVersionCode="$XOLORGG_VERSION_CODE" --stacktrace
+      - name: Upload stable-signed update APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: XolorGG-stable-signed-update-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload installable debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: XolorGG-17.0.0.103.8-test-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14

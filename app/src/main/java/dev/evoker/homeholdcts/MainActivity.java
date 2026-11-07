@@ -76,6 +76,9 @@ public class MainActivity extends Activity {
             "power_gemini_experimental";
     static final String PREF_VOICE_WAKE_ASSISTANT_EXPERIMENTAL =
             "voice_wake_assistant_experimental";
+    static final String PREF_VOICE_WAKE_GEMINI_LIVE = "voice_wake_gemini_live";
+    static final String PREF_VOICE_WAKE_LIVE_AFTER_UNLOCK = "voice_wake_live_after_unlock";
+    static final String PREF_POWER_GEMINI_LIVE_UNLOCKED = "power_gemini_live_unlocked";
     static final String PREF_SWAP_CTS_ASSISTANT_EXPERIMENTAL =
             "swap_cts_assistant_experimental";
     static final String PREF_BETA_SLOW_ANIMATIONS =
@@ -87,6 +90,9 @@ public class MainActivity extends Activity {
     static final boolean DEFAULT_SOUND_ON_ACTIVATION = true;
     static final boolean DEFAULT_POWER_GEMINI_EXPERIMENTAL = true;
     static final boolean DEFAULT_VOICE_WAKE_ASSISTANT_EXPERIMENTAL = false;
+    static final boolean DEFAULT_VOICE_WAKE_GEMINI_LIVE = false;
+    static final boolean DEFAULT_VOICE_WAKE_LIVE_AFTER_UNLOCK = false;
+    static final boolean DEFAULT_POWER_GEMINI_LIVE_UNLOCKED = false;
     static final boolean DEFAULT_SWAP_CTS_ASSISTANT_EXPERIMENTAL = false;
     static final boolean DEFAULT_BETA_SLOW_ANIMATIONS = false;
     static final boolean DEFAULT_BETA_QUICK_SETTINGS_LOG_RECOVERY = false;
@@ -112,7 +118,7 @@ public class MainActivity extends Activity {
     private static final String PREF_SETUP_UI_FINISHED = "stable_ui_setup_finished";
     private static final String STATE_SETUP_PAGE = "setup_page";
     private static final String EXTRA_RECREATE_SETUP_PAGE =
-            "dev.evoker.homeholdcts.extra.RECREATE_SETUP_PAGE";
+            "com.kaernossing.xolorgg.extra.RECREATE_SETUP_PAGE";
 
     private static final int SETUP_PAGE_PRIVILEGED = 0;
     private static final int SETUP_PAGE_GESTURE = 1;
@@ -128,7 +134,7 @@ public class MainActivity extends Activity {
     private static final int TAB_BETA = 5;
     private static final String STATE_SELECTED_TAB = "selected_tab";
     private static final String EXTRA_RECREATE_TAB =
-            "dev.evoker.homeholdcts.extra.RECREATE_TAB";
+            "com.kaernossing.xolorgg.extra.RECREATE_TAB";
 
     // One visual grid for every tab.  These values deliberately live beside
     // the UI-only constants: changing them must never affect setup or watcher
@@ -263,7 +269,7 @@ private final ServiceConnection watcherConnection =
     private MaterialSwitch desktopSearchToggle;
     private TextView desktopSearchStatus;
     private TextView assistantDiagnosticsStatus;
-    private String assistantDiagnosticsChinese = "尚未读取诊断状态";
+    private String assistantDiagnosticsChinese = "Diagnostics not yet available";
     private MaterialSwitch wirelessToggle;
     private TextView wirelessStatus;
     private boolean wirelessRendering;
@@ -1305,6 +1311,109 @@ protected void onStop() {
             syncWatcherPrefs();
         });
         voiceBody.addView(voiceWake);
+        voiceBody.addView(text("Gemini behavior", 18, onSurface, Typeface.BOLD),
+                margins(0, 18, 0, 6));
+
+        MaterialSwitch liveWake = new MaterialSwitch(this);
+        liveWake.setText("XiaoBu → Gemini Live when unlocked");
+        liveWake.setTextColor(onSurface);
+        liveWake.setChecked(getSharedPreferences(PREFS, MODE_PRIVATE)
+                .getBoolean(PREF_VOICE_WAKE_GEMINI_LIVE, DEFAULT_VOICE_WAKE_GEMINI_LIVE));
+        liveWake.setOnCheckedChangeListener((button, checked) -> {
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .edit().putBoolean(PREF_VOICE_WAKE_GEMINI_LIVE, checked).apply();
+            syncWatcherPrefs();
+        });
+        voiceBody.addView(liveWake, margins(0, 10, 0, 4));
+
+        MaterialSwitch liveAfterUnlock = new MaterialSwitch(this);
+        liveAfterUnlock.setText("XiaoBu → Live after fingerprint unlock");
+        liveAfterUnlock.setTextColor(onSurface);
+        android.content.SharedPreferences geminiPrefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        liveAfterUnlock.setChecked(geminiPrefs.getBoolean(
+                PREF_VOICE_WAKE_LIVE_AFTER_UNLOCK,
+                geminiPrefs.getBoolean(PREF_VOICE_WAKE_GEMINI_LIVE,
+                        DEFAULT_VOICE_WAKE_LIVE_AFTER_UNLOCK)));
+        liveAfterUnlock.setOnCheckedChangeListener((button, checked) -> {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putBoolean(PREF_VOICE_WAKE_LIVE_AFTER_UNLOCK, checked).apply();
+            syncWatcherPrefs();
+        });
+        voiceBody.addView(liveAfterUnlock, margins(0, 8, 0, 4));
+
+        MaterialSwitch powerLiveUnlocked = new MaterialSwitch(this);
+        powerLiveUnlocked.setText("Power long press → Gemini Live when unlocked");
+        powerLiveUnlocked.setTextColor(onSurface);
+        powerLiveUnlocked.setChecked(geminiPrefs.getBoolean(
+                PREF_POWER_GEMINI_LIVE_UNLOCKED, DEFAULT_POWER_GEMINI_LIVE_UNLOCKED));
+        powerLiveUnlocked.setOnCheckedChangeListener((button, checked) -> {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putBoolean(PREF_POWER_GEMINI_LIVE_UNLOCKED, checked).apply();
+            syncWatcherPrefs();
+        });
+        voiceBody.addView(powerLiveUnlocked, margins(0, 8, 0, 4));
+
+        voiceBody.addView(supporting(
+                "Power when locked: always the normal Assistant, never a delayed Live launch. "
+                + "XiaoBu when locked: requests normal Gemini immediately, with optional Live "
+                + "switch within 45 seconds after ordinary fingerprint unlock. ColorOS may hide "
+                + "the normal assistant overlay until unlocking. Live actions need the ADB agent. "
+                + "Gesture bar / Circle to Search are unchanged."),
+                margins(0, 4, 0, 8));
+
+        MaterialButton testLive = compactButton("Test Gemini Live (unlocked)");
+        testLive.setOnClickListener(v -> {
+            IDesktopSearchAgent agent = DesktopSearchBridge.agent;
+            if (agent == null || !agent.asBinder().pingBinder()) {
+                Toast.makeText(this, "ADB agent not connected. Activate the agent first.",
+                        Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                Bundle result = agent.requestGeminiLive();
+                Toast.makeText(this, result.getBoolean("queued")
+                        ? "Live is queued, not confirmed. Check the result in Beta."
+                        : "Live unavailable: " + result.getString("reason", "unknown"),
+                        Toast.LENGTH_LONG).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Live request failed: " + e.getClass().getSimpleName(),
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+        voiceBody.addView(testLive, margins(0, 4, 0, 0));
+
+        MaterialButton liveResult = compactButton("Check last Gemini Live result");
+        liveResult.setOnClickListener(v -> {
+            IDesktopSearchAgent agent = DesktopSearchBridge.agent;
+            if (agent == null || !agent.asBinder().pingBinder()) {
+                Toast.makeText(this, "ADB agent not connected", Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                Bundle result = agent.getStatus();
+                String state = result.getString("geminiLiveState", "UNKNOWN");
+                String explanation;
+                if ("QUEUED".equals(state) || "OPENING".equals(state)) {
+                    explanation = "Still running: wait briefly and check again.";
+                } else if ("LIVE_BUTTON_TAPPED".equals(state) || "LIVE_REQUESTED".equals(state)) {
+                    explanation = "Live button was tapped; whether Gemini accepted it still needs checking.";
+                } else if ("LIVE_BUTTON_NOT_FOUND".equals(state)) {
+                    explanation = "Gemini opened, but its Live button was not found.";
+                } else if (state.startsWith("FAILED_")) {
+                    explanation = "The shell agent encountered an error.";
+                } else {
+                    explanation = "No confirmed Live launch yet.";
+                }
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle("Gemini Live launch diagnostics")
+                        .setMessage(state + "\n\n" + explanation)
+                        .setPositiveButton("OK", null).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Could not read agent result: "
+                        + e.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
+            }
+        });
+        voiceBody.addView(liveResult, margins(0, 4, 0, 0));
         voice.addView(voiceBody);
         root.addView(voice, margins(0, 0, 0, 14));
 
@@ -1402,10 +1511,10 @@ protected void onStop() {
         body.addView(doublePowerChoices);
         doublePowerStatus = supporting("Checking the ADB agent…");
         body.addView(doublePowerStatus, margins(0, 6, 0, 10));
-        MaterialButton help = compactButton("使用说明（中文）");
-        help.setOnClickListener(v -> new MaterialAlertDialogBuilder(this).setTitle("双击电源键")
-                .setMessage("开启后选择 Google 钱包或系统相机，亮屏、锁屏和熄屏共用此选择。系统双击电源键的钱包快捷功能需要保持开启。关闭此开关恢复系统原行为。\n\n需要 ADB 代理连接；锁屏时使用安全相机入口，钱包遵守系统解锁要求。不修改默认支付应用。请求被接受不等于界面已经出现。\n\n代理失联时停止拦截，不自动重复启动目标应用。")
-                .setPositiveButton("确定", null).show());
+        MaterialButton help = compactButton("Usage guide");
+        help.setOnClickListener(v -> new MaterialAlertDialogBuilder(this).setTitle("Double-press power")
+                .setMessage("Choose Google Wallet or the system camera for double-press power, including on the lock screen. Keep the ColorOS wallet shortcut enabled. Turning this switch off restores system behavior.\n\nRequires the ADB agent. Camera uses the secure lock-screen entry point; Wallet may require unlocking. This does not change your default payment app. An accepted request does not prove the app appeared.\n\nIf the agent disconnects, interception stops without repeated launches.")
+                .setPositiveButton("OK", null).show());
         body.addView(help);
         card.addView(body);
         return card;
@@ -1485,10 +1594,10 @@ protected void onStop() {
         body.addView(desktopSearchStatus, margins(0, 6, 0, 10));
         assistantDiagnosticsStatus = supporting("Reading assistant diagnostics…");
         body.addView(assistantDiagnosticsStatus, margins(0, 6, 0, 10));
-        MaterialButton diagnosticChinese = compactButton("诊断说明（中文）");
+        MaterialButton diagnosticChinese = compactButton("Diagnostics guide");
         diagnosticChinese.setOnClickListener(v -> new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                .setTitle("助手诊断").setMessage(assistantDiagnosticsChinese)
-                .setPositiveButton("确定", null).show());
+                .setTitle("Assistant diagnostics").setMessage(assistantDiagnosticsChinese)
+                .setPositiveButton("OK", null).show());
         body.addView(diagnosticChinese);
         body.addView(supporting("The ADB agent also listens for wake triggers and can run after USB is disconnected. This option controls desktop search while the master service is on. Stop all features exits the agent. Restart requires ADB or available wireless recovery. Do not run another activity monitor at the same time."));
         MaterialButton command = compactButton("Copy ADB activation command");
@@ -1624,7 +1733,7 @@ protected void onStop() {
                     assistantState.getLong("assistantSampleAgeMs", -1),
                     requestState.getString("requestResult", "UNKNOWN"), requestState.getString("requestTarget", ""),
                     assistantState.getString("assistantSampleReason", "UNAVAILABLE"));
-            final String assistantChinese = DiagnosticSummary.render(true,
+            final String assistantChinese = DiagnosticSummary.render(false,
                     assistantState.getString("assistantConnection", "UNKNOWN"),
                     assistantState.getLong("assistantSampleAgeMs", -1),
                     requestState.getString("requestResult", "UNKNOWN"), requestState.getString("requestTarget", ""),
@@ -4640,6 +4749,21 @@ private void syncWatcherPrefs() {
             prefs.getBoolean(
                     PREF_VOICE_WAKE_ASSISTANT_EXPERIMENTAL,
                     DEFAULT_VOICE_WAKE_ASSISTANT_EXPERIMENTAL));
+
+    data.putBoolean(
+            WatcherIpc.KEY_VOICE_WAKE_GEMINI_LIVE,
+            prefs.getBoolean(PREF_VOICE_WAKE_GEMINI_LIVE, DEFAULT_VOICE_WAKE_GEMINI_LIVE));
+
+    data.putBoolean(
+            WatcherIpc.KEY_VOICE_WAKE_LIVE_AFTER_UNLOCK,
+            prefs.getBoolean(PREF_VOICE_WAKE_LIVE_AFTER_UNLOCK,
+                    prefs.getBoolean(PREF_VOICE_WAKE_GEMINI_LIVE,
+                            DEFAULT_VOICE_WAKE_LIVE_AFTER_UNLOCK)));
+
+    data.putBoolean(
+            WatcherIpc.KEY_POWER_GEMINI_LIVE_UNLOCKED,
+            prefs.getBoolean(PREF_POWER_GEMINI_LIVE_UNLOCKED,
+                    DEFAULT_POWER_GEMINI_LIVE_UNLOCKED));
 
     data.putBoolean(
             WatcherIpc.KEY_SWAP_CTS_ASSISTANT,

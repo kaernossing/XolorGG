@@ -8,7 +8,7 @@ import android.os.*;
 
 /** Internal UI IPC into :watcher; no external pairing or command endpoint. */
 public final class WirelessRecoveryBridge extends ContentProvider {
-    static final Uri URI = Uri.parse("content://dev.evoker.homeholdcts.wireless");
+    static final Uri URI = Uri.parse("content://com.kaernossing.xolorgg.wireless");
     @Override public boolean onCreate() { return true; }
     @Override public Bundle call(String method, String arg, Bundle extras) {
         if (Binder.getCallingUid() != android.os.Process.myUid()) throw new SecurityException("Same application required");

@@ -13,7 +13,7 @@ import android.os.IBinder;
 
 /** Runs in :watcher. Only ADB shell may supply the log-source Binder. */
 public final class WakeLogBridge extends ContentProvider {
-    static final String AUTHORITY = "dev.evoker.homeholdcts.wakelog";
+    static final String AUTHORITY = "com.kaernossing.xolorgg.wakelog";
     static volatile IDesktopSearchAgent agent;
     static boolean isSelected(Context c) {
         return c.getSharedPreferences("adb_log_source", 0).getBoolean("selected", false);

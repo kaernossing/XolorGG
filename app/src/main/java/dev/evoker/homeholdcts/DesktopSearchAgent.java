@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
 
 /** ADB shell entry point, loaded from this signed APK; never runs as an app service. */
 public final class DesktopSearchAgent {
-    private static final String SELF = "dev.evoker.homeholdcts";
+    private static final String SELF = "com.kaernossing.xolorgg";
     private static final String DESC = "android.app.IActivityController";
     private final java.util.concurrent.ThreadPoolExecutor launches = new java.util.concurrent.ThreadPoolExecutor(
             1, 1, 0L, TimeUnit.MILLISECONDS, new java.util.concurrent.LinkedBlockingQueue<>());
@@ -53,6 +53,7 @@ public final class DesktopSearchAgent {
     private String controllerIdentity = "";
     private volatile String error = "";
     private volatile int redirects;
+    private volatile String liveLaunchState = "IDLE";
     private volatile long lastTrigger;
     private IBinder providerBinder;
     private IBinder wakeProviderBinder;
@@ -183,6 +184,7 @@ public final class DesktopSearchAgent {
         b.putString("wakeError", wakeError);
         b.putInt("redirects", redirects);
         b.putLong("lastTrigger", lastTrigger);
+        b.putString("geminiLiveState", liveLaunchState);
         assistantDiagnostics.addTo(b);
         return b;
     }
@@ -273,6 +275,44 @@ public final class DesktopSearchAgent {
                     AgentDiagnostics.shell("DOUBLE_POWER_CONFIG_FAILED " + e.getClass().getSimpleName());
                 }
                 return status();
+            }
+            @Override public Bundle requestGeminiLive() {
+                verify();
+                Bundle out = new Bundle();
+                if (!lifecycle.dispatch(epoch)) {
+                    out.putString("reason", "AGENT_DISCONNECTED");
+                    return out;
+                }
+                try {
+                    if (keyguardLocked()) {
+                        out.putString("reason", "SCREEN_LOCKED");
+                        return out;
+                    }
+                    liveLaunchState = "QUEUED";
+                    launches.execute(() -> {
+                        if (!lifecycle.dispatch(epoch)) {
+                            liveLaunchState = "FAILED_AGENT_DISCONNECTED";
+                            return;
+                        }
+                        liveLaunchState = "OPENING";
+                        try {
+                            boolean launched = GeminiLiveShell.launch();
+                            liveLaunchState = launched ? "LIVE_BUTTON_TAPPED" : "LIVE_BUTTON_NOT_FOUND";
+                            AgentDiagnostics.shell("GEMINI_LIVE state=" + liveLaunchState);
+                        } catch (Exception e) {
+                            String code = e.getMessage();
+                            if (code == null || !code.matches("[A-Z_0-9]{3,90}")) {
+                                code = e.getClass().getSimpleName();
+                            }
+                            liveLaunchState = "FAILED_" + code;
+                            AgentDiagnostics.shell("GEMINI_LIVE state=" + liveLaunchState);
+                        }
+                    });
+                    out.putBoolean("queued", true);
+                } catch (Exception e) {
+                    out.putString("reason", e.getClass().getSimpleName());
+                }
+                return out;
             }
             @Override public void setWakeListener(IAdbWakeListener listener) {
                 checkCaller();

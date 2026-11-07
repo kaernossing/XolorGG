@@ -133,6 +133,15 @@ public class HomeHoldService extends Service {
 
     private volatile SingleDirectLogdSession directLogdSession;
     private final TriggerClassifier triggerClassifier = new TriggerClassifier();
+    private final PendingVoiceLiveUnlock pendingVoiceLiveUnlock = new PendingVoiceLiveUnlock();
+    private static final long DEFERRED_VOICE_LIVE_POLL_MS = 500L;
+    private static final long DEFERRED_VOICE_LIVE_UNLOCK_SETTLE_MS = 700L;
+    private long deferredVoiceLiveUnlockedSince = -1L;
+    private final Runnable deferredVoiceLivePoll = new Runnable() {
+        @Override public void run() {
+            pollDeferredVoiceLive();
+        }
+    };
 
     private volatile int runtimeDelayMs =
             MainActivity.DEFAULT_CTS_DELAY_MS;
@@ -144,6 +153,12 @@ public class HomeHoldService extends Service {
             MainActivity.DEFAULT_POWER_GEMINI_EXPERIMENTAL;
     private volatile boolean runtimeVoiceWakeAssistant =
             MainActivity.DEFAULT_VOICE_WAKE_ASSISTANT_EXPERIMENTAL;
+    private volatile boolean runtimeVoiceWakeGeminiLive =
+            MainActivity.DEFAULT_VOICE_WAKE_GEMINI_LIVE;
+    private volatile boolean runtimeVoiceWakeLiveAfterUnlock =
+            MainActivity.DEFAULT_VOICE_WAKE_LIVE_AFTER_UNLOCK;
+    private volatile boolean runtimePowerGeminiLiveUnlocked =
+            MainActivity.DEFAULT_POWER_GEMINI_LIVE_UNLOCKED;
     private volatile boolean runtimeSwapCtsAssistant =
             MainActivity.DEFAULT_SWAP_CTS_ASSISTANT_EXPERIMENTAL;
 
@@ -172,6 +187,12 @@ public class HomeHoldService extends Service {
             }
 
             String action = intent.getAction();
+            if (Intent.ACTION_USER_PRESENT.equals(action)) {
+                // Promptly poll after fingerprint/password unlock. Polling also
+                // runs independently because some ColorOS builds omit this.
+                mainHandler.removeCallbacks(deferredVoiceLivePoll);
+                mainHandler.postDelayed(deferredVoiceLivePoll, 250L);
+            }
             if (overlayGuardian != null) {
                 overlayGuardian.onSystemTransition(action);
             } else {
@@ -391,6 +412,7 @@ public class HomeHoldService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        clearDeferredVoiceLive("watcher-stopped");
         WirelessRecovery.get(this).watcherRunning(false);
         if (instance == this) instance = null;
         adbLogGeneration++;
@@ -443,6 +465,7 @@ public class HomeHoldService extends Service {
 
     private void stopWatcherFromCommand() {
         running = false;
+        clearDeferredVoiceLive("master-disabled");
         RunIntent.setLocal(this, false);
         RestartReceiver.cancelRestart(this);
         WatcherRescueJobService.cancelScheduled(this);
@@ -505,6 +528,16 @@ public class HomeHoldService extends Service {
                         MainActivity.PREF_VOICE_WAKE_ASSISTANT_EXPERIMENTAL,
                         MainActivity.DEFAULT_VOICE_WAKE_ASSISTANT_EXPERIMENTAL);
 
+        runtimeVoiceWakeGeminiLive =
+                prefs.getBoolean(MainActivity.PREF_VOICE_WAKE_GEMINI_LIVE,
+                        MainActivity.DEFAULT_VOICE_WAKE_GEMINI_LIVE);
+        runtimeVoiceWakeLiveAfterUnlock =
+                prefs.getBoolean(MainActivity.PREF_VOICE_WAKE_LIVE_AFTER_UNLOCK,
+                        runtimeVoiceWakeGeminiLive);
+        runtimePowerGeminiLiveUnlocked =
+                prefs.getBoolean(MainActivity.PREF_POWER_GEMINI_LIVE_UNLOCKED,
+                        MainActivity.DEFAULT_POWER_GEMINI_LIVE_UNLOCKED);
+
         runtimeSwapCtsAssistant =
                 prefs.getBoolean(
                         MainActivity.PREF_SWAP_CTS_ASSISTANT_EXPERIMENTAL,
@@ -541,6 +574,19 @@ public class HomeHoldService extends Service {
                 data.getBoolean(
                         WatcherIpc.KEY_VOICE_WAKE_ASSISTANT,
                         runtimeVoiceWakeAssistant);
+
+        runtimeVoiceWakeGeminiLive =
+                data.getBoolean(WatcherIpc.KEY_VOICE_WAKE_GEMINI_LIVE,
+                        runtimeVoiceWakeGeminiLive);
+        runtimeVoiceWakeLiveAfterUnlock =
+                data.getBoolean(WatcherIpc.KEY_VOICE_WAKE_LIVE_AFTER_UNLOCK,
+                        runtimeVoiceWakeLiveAfterUnlock);
+        runtimePowerGeminiLiveUnlocked =
+                data.getBoolean(WatcherIpc.KEY_POWER_GEMINI_LIVE_UNLOCKED,
+                        runtimePowerGeminiLiveUnlocked);
+        if (!runtimeVoiceWakeAssistant || !runtimeVoiceWakeLiveAfterUnlock) {
+            clearDeferredVoiceLive("deferred-voice-live-disabled");
+        }
 
         runtimeSwapCtsAssistant =
                 data.getBoolean(
@@ -710,8 +756,11 @@ public class HomeHoldService extends Service {
         }
 
         synchronized (triggerLock) {
+            if (TriggerClassifier.isBreenoTouchRoute(line)) {
+                Log.i(TAG, "Breeno Touch route observed; not a confirmed gesture trigger");
+            }
             TriggerClassifier.Source source = triggerClassifier.accept(
-                    line, SystemClock.elapsedRealtime());
+                    line, SystemClock.elapsedRealtime(), runtimeVoiceWakeAssistant);
             if (source == TriggerClassifier.Source.NONE) {
                 if (triggerClassifier.decision() != TriggerClassifier.Decision.IGNORED)
                     ActivationDiagnostics.trigger(this, triggerClassifier.observedSource(), "NONE", triggerClassifier.decision());
@@ -728,6 +777,30 @@ public class HomeHoldService extends Service {
                             + " target=" + (targetAssistant ? "ASSISTANT" : "CTS")
                             + " swap=" + runtimeSwapCtsAssistant);
 
+            // Gemini routing is intentionally distinct per trigger.
+            // Power never queues a delayed Live launch and cannot affect CTS.
+            if (source == TriggerClassifier.Source.POWER) {
+                clearDeferredVoiceLive("power-pressed");
+            }
+            if (targetAssistant) {
+                GeminiRoutePolicy.Action route = GeminiRoutePolicy.choose(
+                        source,
+                        true,
+                        isKeyguardShowing(),
+                        runtimeVoiceWakeGeminiLive,
+                        runtimeVoiceWakeLiveAfterUnlock,
+                        runtimePowerGeminiLiveUnlocked);
+                if (route == GeminiRoutePolicy.Action.ASSISTANT_THEN_LIVE) {
+                    armDeferredVoiceLive(requestId);
+                    // Continue to the existing Assistant session right now.
+                } else if (route == GeminiRoutePolicy.Action.LIVE_NOW) {
+                    if (source == TriggerClassifier.Source.VOICE_WAKE) {
+                        clearDeferredVoiceLive("new-unlocked-voice-wake");
+                    }
+                    if (requestGeminiLiveIfUnlocked(requestId)) return;
+                    // Unavailable shell agent: fall back to normal Assistant.
+                }
+            }
             if (activationRunner != null) {
                 if (targetAssistant) {
                     activationRunner.activateAssistantSession(
@@ -744,6 +817,88 @@ public class HomeHoldService extends Service {
                 }
             } else ActivationDiagnostics.result(this, requestId, "UNAVAILABLE", 0, 0, "RUNNER_ABSENT");
         }
+    }
+
+    private boolean isKeyguardShowing() {
+        try {
+            android.app.KeyguardManager keyguard =
+                    getSystemService(android.app.KeyguardManager.class);
+            return keyguard == null || keyguard.isKeyguardLocked()
+                    || keyguard.isDeviceLocked();
+        } catch (RuntimeException e) {
+            return true; // Never assume unlocked on an unavailable keyguard
+        }
+    }
+
+    private void clearDeferredVoiceLive(String reason) {
+        pendingVoiceLiveUnlock.cancel();
+        deferredVoiceLiveUnlockedSince = -1L;
+        mainHandler.removeCallbacks(deferredVoiceLivePoll);
+        Log.d(TAG, "Deferred XiaoBu Live cleared: " + reason);
+    }
+
+    private void armDeferredVoiceLive(String requestId) {
+        pendingVoiceLiveUnlock.arm(SystemClock.elapsedRealtime());
+        deferredVoiceLiveUnlockedSince = -1L;
+        mainHandler.removeCallbacks(deferredVoiceLivePoll);
+        mainHandler.postDelayed(deferredVoiceLivePoll, DEFERRED_VOICE_LIVE_POLL_MS);
+        ActivationDiagnostics.event(this, requestId,
+                "XIAOBU_NORMAL_ASSISTANT_NOW_LIVE_AFTER_UNLOCK_PENDING");
+        Log.i(TAG, "XiaoBu voice: normal assistant requested now; Live pending unlock");
+    }
+
+    private void pollDeferredVoiceLive() {
+        synchronized (triggerLock) {
+            long now = SystemClock.elapsedRealtime();
+            if (!running || !isEnabled() || !runtimeVoiceWakeAssistant
+                    || !runtimeVoiceWakeLiveAfterUnlock
+                    || !pendingVoiceLiveUnlock.isPending(now)) {
+                clearDeferredVoiceLive("inactive-or-expired");
+                return;
+            }
+            if (isKeyguardShowing()) {
+                deferredVoiceLiveUnlockedSince = -1L;
+                mainHandler.postDelayed(deferredVoiceLivePoll, DEFERRED_VOICE_LIVE_POLL_MS);
+                return;
+            }
+            if (deferredVoiceLiveUnlockedSince < 0L) {
+                deferredVoiceLiveUnlockedSince = now;
+            }
+            // Let the fingerprint unlock animation and Gemini keyguard
+            // transition finish before shell-agent UI automation starts.
+            if (now - deferredVoiceLiveUnlockedSince < DEFERRED_VOICE_LIVE_UNLOCK_SETTLE_MS) {
+                mainHandler.postDelayed(deferredVoiceLivePoll, DEFERRED_VOICE_LIVE_POLL_MS);
+                return;
+            }
+            if (!pendingVoiceLiveUnlock.consume(now)) {
+                clearDeferredVoiceLive("expired-before-launch");
+                return;
+            }
+            deferredVoiceLiveUnlockedSince = -1L;
+            if (requestGeminiLiveIfUnlocked("voice-live-after-fingerprint")) {
+                ActivationDiagnostics.event(this, "voice-live-after-fingerprint",
+                        "XIAOBU_LIVE_REQUEST_QUEUED_AFTER_UNLOCK");
+            } else {
+                Log.i(TAG, "Deferred XiaoBu Live failed to queue after unlock");
+            }
+        }
+    }
+
+    private boolean requestGeminiLiveIfUnlocked(String requestId) {
+        try {
+            if (isKeyguardShowing()) return false;
+            IDesktopSearchAgent agent = WakeLogBridge.agent;
+            if (agent == null || !agent.asBinder().pingBinder()) return false;
+            Bundle response = agent.requestGeminiLive();
+            if (response != null && response.getBoolean("queued")) {
+                ActivationDiagnostics.event(this, requestId, "GEMINI_LIVE queued via shell agent");
+                return true;
+            }
+            Log.i(TAG, "Gemini Live request unavailable; falling back to assistant");
+        } catch (Exception e) {
+            Log.w(TAG, "Gemini Live request failed; falling back to assistant", e);
+        }
+        return false;
     }
 
     private void maybeAutoRecoverLogSession(String reason) {

@@ -70,37 +70,27 @@ final class SettingsNavigator {
     }
 
     static void assistantSettings(Activity activity) {
-        // The AOSP/ColorOS digital-assistant picker. This is the same Settings
-        // surface exposed as "Assist & voice input" on many Android builds.
-        Intent direct = new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS);
-        direct.setComponent(new ComponentName(
-                "com.android.settings",
-                "com.android.settings.Settings$ManageAssistActivity"));
-        direct.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        // Confirmed on the target ColorOS 17 device: the public voice-input
+        // Settings action opens the assistant picker. Other Settings pages may
+        // accept startActivity() but close immediately without throwing.
         try {
-            activity.startActivity(direct);
+            activity.startActivity(new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS));
             return;
-        } catch (Throwable ignored) {
-        }
-
-        Intent voiceInput = new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS);
-        voiceInput.setPackage("com.android.settings");
-        try {
-            activity.startActivity(voiceInput);
-            return;
-        } catch (Throwable ignored) {
+        } catch (RuntimeException ignored) {
         }
 
         try {
             activity.startActivity(new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS));
             return;
-        } catch (Throwable ignored) {
+        } catch (RuntimeException ignored) {
         }
 
         try {
             activity.startActivity(new Intent(Settings.ACTION_SETTINGS));
-        } catch (Throwable t) {
-            Toast.makeText(activity, UiText.tr(activity, "Settings page unavailable"), Toast.LENGTH_SHORT).show();
+        } catch (RuntimeException t) {
+            Toast.makeText(activity,
+                    UiText.tr(activity, "Settings page unavailable"),
+                    Toast.LENGTH_SHORT).show();
         }
     }
 

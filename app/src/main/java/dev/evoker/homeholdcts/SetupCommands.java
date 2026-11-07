@@ -56,7 +56,7 @@ final class SetupCommands {
 
     static Target[] targets(String self) {
         return new Target[] {
-                new Target("ColorGoogle", self, true),
+                new Target("XolorGG", self, true),
                 new Target("Google", GOOGLE, false),
                 new Target("Gemini", GEMINI, false),
                 new Target("Google Services Framework", GSF, false),
@@ -67,7 +67,7 @@ final class SetupCommands {
     static List<Command> all(String self) {
         ArrayList<Command> out = new ArrayList<>();
         out.add(new Command(
-                "ColorGoogle",
+                "XolorGG",
                 "Grant READ_LOGS",
                 self,
                 "pm grant " + self + " android.permission.READ_LOGS",
@@ -160,7 +160,7 @@ final class SetupCommands {
         // package only when it is absent. This complex shell snippet stays in
         // the Shizuku-only route, so the legacy PC one-shot remains simple.
         out.add(new Command(
-                "ColorGoogle",
+                "XolorGG",
                 "Exclude from ColorOS app freeze list",
                 self,
                 "current=$(settings --user 0 get secure app_frozen_switch_close); "

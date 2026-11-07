@@ -52,15 +52,93 @@ public class TriggerClassifierTest {
     @Test public void gestureAndVoiceRetainTheirRoutes() {
         TriggerClassifier c=new TriggerClassifier();
         assertEquals(HOME_GESTURE,c.accept(SERVICE,0));
-        assertEquals(NONE,c.accept(VOICE,3000));
-        assertEquals(VOICE_WAKE,c.accept(SERVICE,3001));
+        assertEquals(VOICE_WAKE,c.accept(VOICE,3000));
+        assertEquals(NONE,c.accept(SERVICE,3001));
         assertEquals(HOME_GESTURE,c.accept(SERVICE,6000));
     }
+    @Test public void optedInVoiceWakeWorksWithoutSpeechServiceOnColorOs17() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(VOICE_WAKE, c.accept(VOICE, 1000, true));
+        assertEquals(TriggerClassifier.Decision.ACCEPTED, c.decision());
+        assertEquals(NONE, c.accept(VOICE, 1100, true));
+        assertEquals(TriggerClassifier.Decision.DEBOUNCED, c.decision());
+        assertEquals(NONE, c.accept(SERVICE, 1200, true));
+        assertEquals(VOICE_WAKE, c.accept(VOICE, 4000, true));
+    }
+
+    @Test public void voiceWakeDisabledDoesNotLaunchCtsOrBlockPower() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(VOICE, 1000, false));
+        assertEquals(TriggerClassifier.Decision.VOICE_MARKER, c.decision());
+        assertEquals(NONE, c.accept(SERVICE, 1100, false));
+        assertEquals(TriggerClassifier.Decision.VOICE_MARKER, c.decision());
+        assertEquals(POWER, c.accept(KEY, 1200, false));
+    }
+
+    private static final String COLOROS17_SPEECH_BIND =
+            "ActivityManager: Unable to start service Intent { "
+            + "act=heytap.speech.intent.action.BIND_SPEECH_ASSIST xflg=0x4 "
+            + "cmp=com.heytap.speechassist/.agent.SpeechAssistAgentService "
+            + "(has extras) mCallingUid=10098 } U=0: not found";
+    private static final String COLOROS17_WAKE_LOCK =
+            "OplusAONSmartDim: onWakeLockAcquireLocked: lock=89541427, flags=0x3000001a, "
+            + "packageName=com.oplus.ovoicemanager.wakeup, tag=\"WakeupService:\", "
+            + "ws=null, uid=10098, pid=14739";
+
+    @Test public void colorOs17XiaoBuPairStartsAssistantWithoutOldService() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertTrue(TriggerClassifier.isCandidateLine(COLOROS17_SPEECH_BIND));
+        assertTrue(TriggerClassifier.isCandidateLine(COLOROS17_WAKE_LOCK));
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 1000, true));
+        assertEquals(VOICE_WAKE, c.accept(COLOROS17_WAKE_LOCK, 1046, true));
+        assertEquals(TriggerClassifier.Decision.ACCEPTED, c.decision());
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 1100, true));
+        assertEquals(NONE, c.accept(COLOROS17_WAKE_LOCK, 1101, true));
+        assertEquals(TriggerClassifier.Decision.DEBOUNCED, c.decision());
+    }
+
+    @Test public void colorOs17XiaoBuPairSupportsReverseOrder() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(COLOROS17_WAKE_LOCK, 1000, true));
+        assertEquals(VOICE_WAKE, c.accept(COLOROS17_SPEECH_BIND, 1050, true));
+    }
+
+    @Test public void colorOs17VoiceEvidenceAloneOrStaleIsIgnored() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 1000, true));
+        assertEquals(NONE, c.accept("OplusAONSmartDim: onWakeLockAcquireLocked: "
+                + "packageName=com.another.app", 1020, true));
+        assertEquals(NONE, c.accept(COLOROS17_WAKE_LOCK, 2600, true));
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 5000, true));
+        assertEquals(NONE, c.accept("OplusAONSmartDim: onWakeLockReleaseLocked: "
+                + "packageName=com.oplus.ovoicemanager.wakeup, tag=\"WakeupService:\"", 5050, true));
+        assertEquals(NONE, c.accept("OplusAONSmartDim: onWakeLockAcquireLocked: "
+                + "packageName=com.oplus.ovoicemanager.wakeup, tag=\"other:\"", 5051, true));
+    }
+
+    @Test public void colorOs17XiaoBuDisabledAndPowerStillWorks() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 1000, false));
+        assertEquals(NONE, c.accept(COLOROS17_WAKE_LOCK, 1046, false));
+        assertEquals(TriggerClassifier.Decision.VOICE_MARKER, c.decision());
+        assertEquals(POWER, c.accept(KEY, 1100, false));
+    }
+
+    @Test public void colorOs17VoiceAndGestureRemainIndependent() {
+        TriggerClassifier c = new TriggerClassifier();
+        c.accept(HOME_HANDLE, 1000, true);
+        c.accept(HOME_DOWN, 1001, true);
+        assertEquals(HOME_GESTURE, c.accept(OCR_ROUTE, 1300, true));
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 1310, true));
+        assertEquals(NONE, c.accept(COLOROS17_WAKE_LOCK, 1350, true));
+        assertEquals(TriggerClassifier.Decision.DEBOUNCED, c.decision());
+    }
+
     @Test public void powerTakesPriorityOverStaleVoiceMarker() {
         TriggerClassifier c=new TriggerClassifier();
-        c.accept(VOICE,100);
-        assertEquals(POWER,c.accept(KEY,101));
-        assertEquals(NONE,c.accept(SERVICE,102));
+        assertEquals(NONE,c.accept(VOICE,100,false));
+        assertEquals(POWER,c.accept(KEY,101,false));
+        assertEquals(NONE,c.accept(SERVICE,102,false));
     }
     @Test public void unrelatedAndIncompleteLogsDoNothing() {
         TriggerClassifier c=new TriggerClassifier();
@@ -69,6 +147,63 @@ public class TriggerClassifierTest {
         assertEquals(NONE,c.accept("act=heytap.intent.action.ACTIVATE_SPEECH_ASSIST",0));
         assertEquals(NONE,c.accept("PowerKey:onShortPress",0));
     }
+    @Test public void breenoTouchRouteIsDiagnosticOnly() {
+        String line = "ActivityTaskManager: START u0 {cmp=com.coloros.colordirectservice/com.coloros.directui.ui.CollectInfoActivity}";
+        assertTrue(TriggerClassifier.isBreenoTouchRoute(line));
+        assertTrue(TriggerClassifier.isCandidateLine(line));
+        assertEquals(NONE, new TriggerClassifier().accept(line, 1000));
+        assertFalse(TriggerClassifier.isBreenoTouchRoute("NavigationBarHandle: send down event"));
+    }
+    private static final String HOME_HANDLE =
+            "SystemUi--NavBar: NoBackGesture-->gestureBar animation: gestureBarNotHide = true, isCorrectHomeHandle = true";
+    private static final String HOME_DOWN =
+            "SystemUi--NavBar: NoBackGesture-->send down event to NavigationBarHandle";
+    private static final String OCR_ROUTE =
+            "SystemUi--NavBar: OcrScreenService-->getServiceIntent bundle: Bundle[{StartUpType=0}]";
+
+    @Test public void colorOs17HomeHoldActivatesWithoutSpeechService() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertTrue(TriggerClassifier.isCandidateLine(HOME_HANDLE));
+        assertTrue(TriggerClassifier.isCandidateLine(HOME_DOWN));
+        assertTrue(TriggerClassifier.isCandidateLine(OCR_ROUTE));
+        assertEquals(NONE, c.accept(HOME_HANDLE, 1000));
+        assertEquals(NONE, c.accept(HOME_DOWN, 1002));
+        assertEquals(HOME_GESTURE, c.accept(OCR_ROUTE, 1300));
+        assertEquals(NONE, c.accept(OCR_ROUTE, 1305));
+    }
+
+    @Test public void ordinaryHomeSwipeNeverTriggersCts() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(HOME_HANDLE, 1000));
+        assertEquals(NONE, c.accept(HOME_DOWN, 1001));
+        assertEquals(NONE, c.accept("SystemUi--NavBar: SideGestureDetector--> ev:MotionEvent { action=ACTION_UP }", 1400));
+        assertEquals(NONE, c.accept("VibratorManagerServiceExtImpl: opPkg=com.android.launcher mEffectId=367", 1401));
+    }
+
+    @Test public void ocrRouteAloneOrAfterExpiredHandleDoesNotTrigger() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(OCR_ROUTE, 100));
+        assertEquals(NONE, c.accept(HOME_DOWN, 200));
+        assertEquals(NONE, c.accept(OCR_ROUTE, 300));
+        assertEquals(NONE, c.accept(HOME_HANDLE, 1000));
+        assertEquals(NONE, c.accept(HOME_DOWN, 1001));
+        assertEquals(NONE, c.accept(OCR_ROUTE, 2300));
+        assertEquals(NONE, c.accept(OCR_ROUTE, 2301));
+    }
+
+    @Test public void colorOs17HomeHoldRespectsDebounceAndSwap() {
+        TriggerClassifier c = new TriggerClassifier();
+        c.accept(HOME_HANDLE, 1000);
+        c.accept(HOME_DOWN, 1001);
+        assertEquals(HOME_GESTURE, c.accept(OCR_ROUTE, 1100));
+        c.accept(HOME_HANDLE, 1800);
+        c.accept(HOME_DOWN, 1801);
+        assertEquals(NONE, c.accept(OCR_ROUTE, 1850));
+        assertEquals(TriggerClassifier.Decision.DEBOUNCED, c.decision());
+        assertFalse(TriggerClassifier.targetsAssistant(HOME_GESTURE, true, false, false));
+        assertTrue(TriggerClassifier.targetsAssistant(HOME_GESTURE, true, false, true));
+    }
+
     @Test public void preferencesAndSwapPreserved() {
         assertTrue(TriggerClassifier.targetsAssistant(POWER,true,false,false));
         assertFalse(TriggerClassifier.targetsAssistant(HOME_GESTURE,true,false,false));
