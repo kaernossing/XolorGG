@@ -1358,7 +1358,7 @@ protected void onStop() {
                 String explanation;
                 if ("QUEUED".equals(state) || "OPENING".equals(state)) {
                     explanation = "Still running: wait briefly and check again.";
-                } else if ("LIVE_BUTTON_TAPPED".equals(state)) {
+                } else if ("LIVE_BUTTON_TAPPED".equals(state) || "LIVE_REQUESTED".equals(state)) {
                     explanation = "Live button was tapped; whether Gemini accepted it still needs checking.";
                 } else if ("LIVE_BUTTON_NOT_FOUND".equals(state)) {
                     explanation = "Gemini opened, but its Live button was not found.";
