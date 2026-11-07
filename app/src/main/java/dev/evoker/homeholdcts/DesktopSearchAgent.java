@@ -290,10 +290,14 @@ public final class DesktopSearchAgent {
                     }
                     liveLaunchState = "QUEUED";
                     launches.execute(() -> {
-                        if (!lifecycle.dispatch(epoch)) return;
+                        if (!lifecycle.dispatch(epoch)) {
+                            liveLaunchState = "FAILED_AGENT_DISCONNECTED";
+                            return;
+                        }
+                        liveLaunchState = "OPENING";
                         try {
                             boolean launched = GeminiLiveShell.launch();
-                            liveLaunchState = launched ? "LIVE_REQUESTED" : "LIVE_BUTTON_NOT_FOUND";
+                            liveLaunchState = launched ? "LIVE_BUTTON_TAPPED" : "LIVE_BUTTON_NOT_FOUND";
                             AgentDiagnostics.shell("GEMINI_LIVE state=" + liveLaunchState);
                         } catch (Exception e) {
                             liveLaunchState = "FAILED_" + e.getClass().getSimpleName();

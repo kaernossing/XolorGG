@@ -28,6 +28,14 @@ public class PendingVoiceLiveUnlockTest {
         assertFalse(pending.consume(2000));
     }
 
+    @Test public void pendingExpiresWithoutUserPresentBroadcast() {
+        PendingVoiceLiveUnlock pending = new PendingVoiceLiveUnlock();
+        pending.arm(1000);
+        assertTrue(pending.isPending(2000));
+        assertFalse(pending.isPending(46_001));
+        assertFalse(pending.consume(46_002));
+    }
+
     @Test public void latestRequestReplacesOlderOne() {
         PendingVoiceLiveUnlock pending = new PendingVoiceLiveUnlock();
         pending.arm(1000);

@@ -1335,7 +1335,7 @@ protected void onStop() {
             try {
                 Bundle result = agent.requestGeminiLive();
                 Toast.makeText(this, result.getBoolean("queued")
-                        ? "Gemini Live start requested. Check the Gemini screen."
+                        ? "Live is queued, not confirmed. Check the result in Beta."
                         : "Live unavailable: " + result.getString("reason", "unknown"),
                         Toast.LENGTH_LONG).show();
             } catch (Exception e) {
@@ -1344,6 +1344,39 @@ protected void onStop() {
             }
         });
         voiceBody.addView(testLive, margins(0, 4, 0, 0));
+
+        MaterialButton liveResult = compactButton("Check last Gemini Live result");
+        liveResult.setOnClickListener(v -> {
+            IDesktopSearchAgent agent = DesktopSearchBridge.agent;
+            if (agent == null || !agent.asBinder().pingBinder()) {
+                Toast.makeText(this, "ADB agent not connected", Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                Bundle result = agent.getStatus();
+                String state = result.getString("geminiLiveState", "UNKNOWN");
+                String explanation;
+                if ("QUEUED".equals(state) || "OPENING".equals(state)) {
+                    explanation = "Still running: wait briefly and check again.";
+                } else if ("LIVE_BUTTON_TAPPED".equals(state)) {
+                    explanation = "Live button was tapped; whether Gemini accepted it still needs checking.";
+                } else if ("LIVE_BUTTON_NOT_FOUND".equals(state)) {
+                    explanation = "Gemini opened, but its Live button was not found.";
+                } else if (state.startsWith("FAILED_")) {
+                    explanation = "The shell agent encountered an error.";
+                } else {
+                    explanation = "No confirmed Live launch yet.";
+                }
+                new MaterialAlertDialogBuilder(this)
+                        .setTitle("Gemini Live launch diagnostics")
+                        .setMessage(state + "\n\n" + explanation)
+                        .setPositiveButton("OK", null).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Could not read agent result: "
+                        + e.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
+            }
+        });
+        voiceBody.addView(liveResult, margins(0, 4, 0, 0));
         voice.addView(voiceBody);
         root.addView(voice, margins(0, 0, 0, 14));
 

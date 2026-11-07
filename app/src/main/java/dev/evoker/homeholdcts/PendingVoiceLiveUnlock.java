@@ -19,6 +19,15 @@ final class PendingVoiceLiveUnlock {
         return start >= 0L && now >= start && now - start <= MAX_WAIT_MS;
     }
 
+    boolean isPending(long now) {
+        if (armedAt < 0L) return false;
+        if (now < armedAt || now - armedAt > MAX_WAIT_MS) {
+            armedAt = -1L;
+            return false;
+        }
+        return true;
+    }
+
     void cancel() {
         armedAt = -1L;
     }

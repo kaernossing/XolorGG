@@ -134,6 +134,21 @@ public class HomeHoldService extends Service {
     private volatile SingleDirectLogdSession directLogdSession;
     private final TriggerClassifier triggerClassifier = new TriggerClassifier();
     private final PendingVoiceLiveUnlock pendingVoiceLiveUnlock = new PendingVoiceLiveUnlock();
+    private static final long DEFERRED_LIVE_CHECK_MS = 750L;
+    // Do not rely solely on USER_PRESENT: some ColorOS unlock transitions
+    // never dispatch that broadcast to our watcher process.
+    private final Runnable deferredVoiceLiveCheck = new Runnable() {
+        @Override public void run() {
+            maybeStartDeferredVoiceLive();
+            synchronized (triggerLock) {
+                if (running && isEnabled() && runtimeVoiceWakeAssistant
+                        && runtimeVoiceWakeGeminiLive
+                        && pendingVoiceLiveUnlock.isPending(SystemClock.elapsedRealtime())) {
+                    mainHandler.postDelayed(this, DEFERRED_LIVE_CHECK_MS);
+                }
+            }
+        }
+    };
 
     private volatile int runtimeDelayMs =
             MainActivity.DEFAULT_CTS_DELAY_MS;
@@ -403,6 +418,7 @@ public class HomeHoldService extends Service {
         synchronized (triggerLock) {
             pendingVoiceLiveUnlock.cancel();
         }
+        mainHandler.removeCallbacks(deferredVoiceLiveCheck);
         WirelessRecovery.get(this).watcherRunning(false);
         if (instance == this) instance = null;
         adbLogGeneration++;
@@ -565,6 +581,7 @@ public class HomeHoldService extends Service {
             synchronized (triggerLock) {
                 pendingVoiceLiveUnlock.cancel();
             }
+            mainHandler.removeCallbacks(deferredVoiceLiveCheck);
         }
 
         runtimeSwapCtsAssistant =
@@ -765,6 +782,8 @@ public class HomeHoldService extends Service {
                     && runtimeVoiceWakeGeminiLive) {
                 if (isKeyguardShowing()) {
                     pendingVoiceLiveUnlock.arm(SystemClock.elapsedRealtime());
+                    mainHandler.removeCallbacks(deferredVoiceLiveCheck);
+                    mainHandler.postDelayed(deferredVoiceLiveCheck, DEFERRED_LIVE_CHECK_MS);
                     ActivationDiagnostics.event(this, requestId,
                             "GEMINI_LIVE deferred until user unlock");
                     Log.i(TAG, "Voice Live deferred until regular unlock");
@@ -807,8 +826,10 @@ public class HomeHoldService extends Service {
                 pendingVoiceLiveUnlock.cancel();
                 return;
             }
+            if (!pendingVoiceLiveUnlock.isPending(SystemClock.elapsedRealtime())) return;
             if (isKeyguardShowing()) return;
             if (!pendingVoiceLiveUnlock.consume(SystemClock.elapsedRealtime())) return;
+            mainHandler.removeCallbacks(deferredVoiceLiveCheck);
             if (!requestGeminiLiveIfUnlocked("voice-wake-after-unlock")) {
                 Log.i(TAG, "Deferred voice Live could not start; no retry after unlock");
             }
