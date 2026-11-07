@@ -59,14 +59,32 @@ final class TriggerClassifier {
     }
 
     Source accept(String line, long now) {
+        return accept(line, now, true);
+    }
+
+    Source accept(String line, long now, boolean voiceWakeEnabled) {
         decision = Decision.IGNORED;
         observed = Source.NONE;
         if (line == null || line.isEmpty()) return Source.NONE;
         if (line.contains("wakeUpSpeechAssist caller_package: com.oplus.ovoicemanager.wakeup")) {
+            // ColorOS 17 may wake the display without subsequently attempting
+            // the disabled SpeechService. Treat the explicit XiaoBu wake marker
+            // as a voice trigger only when the user enabled voice routing.
             lastVoiceMarker = now;
-            decision = Decision.VOICE_MARKER;
             observed = Source.VOICE_WAKE;
-            return Source.NONE;
+            if (!voiceWakeEnabled) {
+                decision = Decision.VOICE_MARKER;
+                return Source.NONE;
+            }
+            if (recent(lastTrigger, now, DEBOUNCE_MS - 1L)
+                    || recent(lastPowerMarker, now, POWER_MARKER_WINDOW_MS)) {
+                decision = Decision.DEBOUNCED;
+                return Source.NONE;
+            }
+            lastTrigger = now;
+            lastVoiceMarker = -1L;
+            decision = Decision.ACCEPTED;
+            return Source.VOICE_WAKE;
         }
         if (isHomeHandleMarker(line)) {
             lastHomeHandleMarker = now;
@@ -99,6 +117,12 @@ final class TriggerClassifier {
                 && recent(lastVoiceMarker, now, VOICE_WAKE_MARKER_WINDOW_MS);
         if (voice) lastVoiceMarker = -1L;
         observed = power ? Source.POWER : (voice ? Source.VOICE_WAKE : Source.HOME_GESTURE);
+        if (voice && !voiceWakeEnabled) {
+            // A speech-service tail from a disabled XiaoBu voice route must
+            // not accidentally become Circle to Search.
+            decision = Decision.VOICE_MARKER;
+            return Source.NONE;
+        }
         // Only an accepted activation moves the cooldown. Duplicate OEM markers
         // and the following speech-service attempt must never schedule another.
         if (recent(lastTrigger, now, DEBOUNCE_MS - 1L)) {
