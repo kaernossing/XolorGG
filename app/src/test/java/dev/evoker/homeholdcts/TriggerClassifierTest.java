@@ -75,6 +75,65 @@ public class TriggerClassifierTest {
         assertEquals(POWER, c.accept(KEY, 1200, false));
     }
 
+    private static final String COLOROS17_SPEECH_BIND =
+            "ActivityManager: Unable to start service Intent { "
+            + "act=heytap.speech.intent.action.BIND_SPEECH_ASSIST xflg=0x4 "
+            + "cmp=com.heytap.speechassist/.agent.SpeechAssistAgentService "
+            + "(has extras) mCallingUid=10098 } U=0: not found";
+    private static final String COLOROS17_WAKE_LOCK =
+            "OplusAONSmartDim: onWakeLockAcquireLocked: lock=89541427, flags=0x3000001a, "
+            + "packageName=com.oplus.ovoicemanager.wakeup, tag=\"WakeupService:\", "
+            + "ws=null, uid=10098, pid=14739";
+
+    @Test public void colorOs17XiaoBuPairStartsAssistantWithoutOldService() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertTrue(TriggerClassifier.isCandidateLine(COLOROS17_SPEECH_BIND));
+        assertTrue(TriggerClassifier.isCandidateLine(COLOROS17_WAKE_LOCK));
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 1000, true));
+        assertEquals(VOICE_WAKE, c.accept(COLOROS17_WAKE_LOCK, 1046, true));
+        assertEquals(TriggerClassifier.Decision.ACCEPTED, c.decision());
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 1100, true));
+        assertEquals(NONE, c.accept(COLOROS17_WAKE_LOCK, 1101, true));
+        assertEquals(TriggerClassifier.Decision.DEBOUNCED, c.decision());
+    }
+
+    @Test public void colorOs17XiaoBuPairSupportsReverseOrder() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(COLOROS17_WAKE_LOCK, 1000, true));
+        assertEquals(VOICE_WAKE, c.accept(COLOROS17_SPEECH_BIND, 1050, true));
+    }
+
+    @Test public void colorOs17VoiceEvidenceAloneOrStaleIsIgnored() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 1000, true));
+        assertEquals(NONE, c.accept("OplusAONSmartDim: onWakeLockAcquireLocked: "
+                + "packageName=com.another.app", 1020, true));
+        assertEquals(NONE, c.accept(COLOROS17_WAKE_LOCK, 2600, true));
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 5000, true));
+        assertEquals(NONE, c.accept("OplusAONSmartDim: onWakeLockReleaseLocked: "
+                + "packageName=com.oplus.ovoicemanager.wakeup, tag=\"WakeupService:\"", 5050, true));
+        assertEquals(NONE, c.accept("OplusAONSmartDim: onWakeLockAcquireLocked: "
+                + "packageName=com.oplus.ovoicemanager.wakeup, tag=\"other:\"", 5051, true));
+    }
+
+    @Test public void colorOs17XiaoBuDisabledAndPowerStillWorks() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 1000, false));
+        assertEquals(NONE, c.accept(COLOROS17_WAKE_LOCK, 1046, false));
+        assertEquals(TriggerClassifier.Decision.VOICE_MARKER, c.decision());
+        assertEquals(POWER, c.accept(KEY, 1100, false));
+    }
+
+    @Test public void colorOs17VoiceAndGestureRemainIndependent() {
+        TriggerClassifier c = new TriggerClassifier();
+        c.accept(HOME_HANDLE, 1000, true);
+        c.accept(HOME_DOWN, 1001, true);
+        assertEquals(HOME_GESTURE, c.accept(OCR_ROUTE, 1300, true));
+        assertEquals(NONE, c.accept(COLOROS17_SPEECH_BIND, 1310, true));
+        assertEquals(NONE, c.accept(COLOROS17_WAKE_LOCK, 1350, true));
+        assertEquals(TriggerClassifier.Decision.DEBOUNCED, c.decision());
+    }
+
     @Test public void powerTakesPriorityOverStaleVoiceMarker() {
         TriggerClassifier c=new TriggerClassifier();
         assertEquals(NONE,c.accept(VOICE,100,false));
