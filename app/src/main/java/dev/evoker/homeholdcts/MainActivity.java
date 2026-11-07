@@ -77,6 +77,8 @@ public class MainActivity extends Activity {
     static final String PREF_VOICE_WAKE_ASSISTANT_EXPERIMENTAL =
             "voice_wake_assistant_experimental";
     static final String PREF_VOICE_WAKE_GEMINI_LIVE = "voice_wake_gemini_live";
+    static final String PREF_VOICE_WAKE_LIVE_AFTER_UNLOCK = "voice_wake_live_after_unlock";
+    static final String PREF_POWER_GEMINI_LIVE_UNLOCKED = "power_gemini_live_unlocked";
     static final String PREF_SWAP_CTS_ASSISTANT_EXPERIMENTAL =
             "swap_cts_assistant_experimental";
     static final String PREF_BETA_SLOW_ANIMATIONS =
@@ -89,6 +91,8 @@ public class MainActivity extends Activity {
     static final boolean DEFAULT_POWER_GEMINI_EXPERIMENTAL = true;
     static final boolean DEFAULT_VOICE_WAKE_ASSISTANT_EXPERIMENTAL = false;
     static final boolean DEFAULT_VOICE_WAKE_GEMINI_LIVE = false;
+    static final boolean DEFAULT_VOICE_WAKE_LIVE_AFTER_UNLOCK = false;
+    static final boolean DEFAULT_POWER_GEMINI_LIVE_UNLOCKED = false;
     static final boolean DEFAULT_SWAP_CTS_ASSISTANT_EXPERIMENTAL = false;
     static final boolean DEFAULT_BETA_SLOW_ANIMATIONS = false;
     static final boolean DEFAULT_BETA_QUICK_SETTINGS_LOG_RECOVERY = false;
@@ -1307,9 +1311,11 @@ protected void onStop() {
             syncWatcherPrefs();
         });
         voiceBody.addView(voiceWake);
+        voiceBody.addView(text("Gemini behavior", 18, onSurface, Typeface.BOLD),
+                margins(0, 18, 0, 6));
 
         MaterialSwitch liveWake = new MaterialSwitch(this);
-        liveWake.setText("XiaoBu → Gemini Live (unlocked · beta)");
+        liveWake.setText("XiaoBu → Gemini Live when unlocked");
         liveWake.setTextColor(onSurface);
         liveWake.setChecked(getSharedPreferences(PREFS, MODE_PRIVATE)
                 .getBoolean(PREF_VOICE_WAKE_GEMINI_LIVE, DEFAULT_VOICE_WAKE_GEMINI_LIVE));
@@ -1319,12 +1325,41 @@ protected void onStop() {
             syncWatcherPrefs();
         });
         voiceBody.addView(liveWake, margins(0, 10, 0, 4));
+
+        MaterialSwitch liveAfterUnlock = new MaterialSwitch(this);
+        liveAfterUnlock.setText("XiaoBu → Live after fingerprint unlock");
+        liveAfterUnlock.setTextColor(onSurface);
+        android.content.SharedPreferences geminiPrefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        liveAfterUnlock.setChecked(geminiPrefs.getBoolean(
+                PREF_VOICE_WAKE_LIVE_AFTER_UNLOCK,
+                geminiPrefs.getBoolean(PREF_VOICE_WAKE_GEMINI_LIVE,
+                        DEFAULT_VOICE_WAKE_LIVE_AFTER_UNLOCK)));
+        liveAfterUnlock.setOnCheckedChangeListener((button, checked) -> {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putBoolean(PREF_VOICE_WAKE_LIVE_AFTER_UNLOCK, checked).apply();
+            syncWatcherPrefs();
+        });
+        voiceBody.addView(liveAfterUnlock, margins(0, 8, 0, 4));
+
+        MaterialSwitch powerLiveUnlocked = new MaterialSwitch(this);
+        powerLiveUnlocked.setText("Power long press → Gemini Live when unlocked");
+        powerLiveUnlocked.setTextColor(onSurface);
+        powerLiveUnlocked.setChecked(geminiPrefs.getBoolean(
+                PREF_POWER_GEMINI_LIVE_UNLOCKED, DEFAULT_POWER_GEMINI_LIVE_UNLOCKED));
+        powerLiveUnlocked.setOnCheckedChangeListener((button, checked) -> {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putBoolean(PREF_POWER_GEMINI_LIVE_UNLOCKED, checked).apply();
+            syncWatcherPrefs();
+        });
+        voiceBody.addView(powerLiveUnlocked, margins(0, 8, 0, 4));
+
         voiceBody.addView(supporting(
-                "Requires the connected ADB agent. XiaoBu opens Gemini Live immediately while unlocked. "
-                + "When locked, XiaoBu opens the normal assistant first, then requests Live "
-                + "automatically after fingerprint unlock (within 45 seconds). "
-                + "Power long press remains normal Assistant and never queues Live."),
-                margins(0, 0, 0, 8));
+                "Power when locked: always the normal Assistant, never a delayed Live launch. "
+                + "XiaoBu when locked: requests normal Gemini immediately, with optional Live "
+                + "switch within 45 seconds after ordinary fingerprint unlock. ColorOS may hide "
+                + "the normal assistant overlay until unlocking. Live actions need the ADB agent. "
+                + "Gesture bar / Circle to Search are unchanged."),
+                margins(0, 4, 0, 8));
 
         MaterialButton testLive = compactButton("Test Gemini Live (unlocked)");
         testLive.setOnClickListener(v -> {
@@ -4718,6 +4753,17 @@ private void syncWatcherPrefs() {
     data.putBoolean(
             WatcherIpc.KEY_VOICE_WAKE_GEMINI_LIVE,
             prefs.getBoolean(PREF_VOICE_WAKE_GEMINI_LIVE, DEFAULT_VOICE_WAKE_GEMINI_LIVE));
+
+    data.putBoolean(
+            WatcherIpc.KEY_VOICE_WAKE_LIVE_AFTER_UNLOCK,
+            prefs.getBoolean(PREF_VOICE_WAKE_LIVE_AFTER_UNLOCK,
+                    prefs.getBoolean(PREF_VOICE_WAKE_GEMINI_LIVE,
+                            DEFAULT_VOICE_WAKE_LIVE_AFTER_UNLOCK)));
+
+    data.putBoolean(
+            WatcherIpc.KEY_POWER_GEMINI_LIVE_UNLOCKED,
+            prefs.getBoolean(PREF_POWER_GEMINI_LIVE_UNLOCKED,
+                    DEFAULT_POWER_GEMINI_LIVE_UNLOCKED));
 
     data.putBoolean(
             WatcherIpc.KEY_SWAP_CTS_ASSISTANT,

@@ -155,6 +155,10 @@ public class HomeHoldService extends Service {
             MainActivity.DEFAULT_VOICE_WAKE_ASSISTANT_EXPERIMENTAL;
     private volatile boolean runtimeVoiceWakeGeminiLive =
             MainActivity.DEFAULT_VOICE_WAKE_GEMINI_LIVE;
+    private volatile boolean runtimeVoiceWakeLiveAfterUnlock =
+            MainActivity.DEFAULT_VOICE_WAKE_LIVE_AFTER_UNLOCK;
+    private volatile boolean runtimePowerGeminiLiveUnlocked =
+            MainActivity.DEFAULT_POWER_GEMINI_LIVE_UNLOCKED;
     private volatile boolean runtimeSwapCtsAssistant =
             MainActivity.DEFAULT_SWAP_CTS_ASSISTANT_EXPERIMENTAL;
 
@@ -527,6 +531,12 @@ public class HomeHoldService extends Service {
         runtimeVoiceWakeGeminiLive =
                 prefs.getBoolean(MainActivity.PREF_VOICE_WAKE_GEMINI_LIVE,
                         MainActivity.DEFAULT_VOICE_WAKE_GEMINI_LIVE);
+        runtimeVoiceWakeLiveAfterUnlock =
+                prefs.getBoolean(MainActivity.PREF_VOICE_WAKE_LIVE_AFTER_UNLOCK,
+                        runtimeVoiceWakeGeminiLive);
+        runtimePowerGeminiLiveUnlocked =
+                prefs.getBoolean(MainActivity.PREF_POWER_GEMINI_LIVE_UNLOCKED,
+                        MainActivity.DEFAULT_POWER_GEMINI_LIVE_UNLOCKED);
 
         runtimeSwapCtsAssistant =
                 prefs.getBoolean(
@@ -568,8 +578,14 @@ public class HomeHoldService extends Service {
         runtimeVoiceWakeGeminiLive =
                 data.getBoolean(WatcherIpc.KEY_VOICE_WAKE_GEMINI_LIVE,
                         runtimeVoiceWakeGeminiLive);
-        if (!runtimeVoiceWakeAssistant || !runtimeVoiceWakeGeminiLive) {
-            clearDeferredVoiceLive("voice-live-disabled");
+        runtimeVoiceWakeLiveAfterUnlock =
+                data.getBoolean(WatcherIpc.KEY_VOICE_WAKE_LIVE_AFTER_UNLOCK,
+                        runtimeVoiceWakeLiveAfterUnlock);
+        runtimePowerGeminiLiveUnlocked =
+                data.getBoolean(WatcherIpc.KEY_POWER_GEMINI_LIVE_UNLOCKED,
+                        runtimePowerGeminiLiveUnlocked);
+        if (!runtimeVoiceWakeAssistant || !runtimeVoiceWakeLiveAfterUnlock) {
+            clearDeferredVoiceLive("deferred-voice-live-disabled");
         }
 
         runtimeSwapCtsAssistant =
@@ -761,21 +777,28 @@ public class HomeHoldService extends Service {
                             + " target=" + (targetAssistant ? "ASSISTANT" : "CTS")
                             + " swap=" + runtimeSwapCtsAssistant);
 
-            // Only XiaoBu can queue Live on unlock. A Power press keeps the
-            // original assistant path, never queues Live, and cancels an older
-            // XiaoBu request so pressing Power cannot cause an unwanted switch.
+            // Gemini routing is intentionally distinct per trigger.
+            // Power never queues a delayed Live launch and cannot affect CTS.
             if (source == TriggerClassifier.Source.POWER) {
                 clearDeferredVoiceLive("power-pressed");
             }
-            if (source == TriggerClassifier.Source.VOICE_WAKE
-                    && targetAssistant && runtimeVoiceWakeGeminiLive) {
-                if (isKeyguardShowing()) {
+            if (targetAssistant) {
+                GeminiRoutePolicy.Action route = GeminiRoutePolicy.choose(
+                        source,
+                        true,
+                        isKeyguardShowing(),
+                        runtimeVoiceWakeGeminiLive,
+                        runtimeVoiceWakeLiveAfterUnlock,
+                        runtimePowerGeminiLiveUnlocked);
+                if (route == GeminiRoutePolicy.Action.ASSISTANT_THEN_LIVE) {
                     armDeferredVoiceLive(requestId);
-                    // Do not return: start the NORMAL assistant right now on
-                    // the lock screen; Live comes only after real unlocking.
-                } else {
-                    clearDeferredVoiceLive("new-unlocked-voice-wake");
+                    // Continue to the existing Assistant session right now.
+                } else if (route == GeminiRoutePolicy.Action.LIVE_NOW) {
+                    if (source == TriggerClassifier.Source.VOICE_WAKE) {
+                        clearDeferredVoiceLive("new-unlocked-voice-wake");
+                    }
                     if (requestGeminiLiveIfUnlocked(requestId)) return;
+                    // Unavailable shell agent: fall back to normal Assistant.
                 }
             }
             if (activationRunner != null) {
@@ -828,7 +851,7 @@ public class HomeHoldService extends Service {
         synchronized (triggerLock) {
             long now = SystemClock.elapsedRealtime();
             if (!running || !isEnabled() || !runtimeVoiceWakeAssistant
-                    || !runtimeVoiceWakeGeminiLive
+                    || !runtimeVoiceWakeLiveAfterUnlock
                     || !pendingVoiceLiveUnlock.isPending(now)) {
                 clearDeferredVoiceLive("inactive-or-expired");
                 return;
