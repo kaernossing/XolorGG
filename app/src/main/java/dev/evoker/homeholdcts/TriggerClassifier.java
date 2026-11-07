@@ -12,11 +12,14 @@ final class TriggerClassifier {
     static final long DEBOUNCE_MS = 2500L;
     private static final long POWER_MARKER_WINDOW_MS = 500L;
     private static final long VOICE_WAKE_MARKER_WINDOW_MS = 1000L;
+    private static final long COLOROS17_WAKE_PAIR_WINDOW_MS = 1500L;
     private static final long HOME_HANDLE_WINDOW_MS = 1200L;
     private static final long HOME_HANDLE_DOWN_WINDOW_MS = 450L;
     private long lastTrigger = -1L;
     private long lastPowerMarker = -1L;
     private long lastVoiceMarker = -1L;
+    private long lastColorOs17VoiceBind = -1L;
+    private long lastColorOs17VoiceWakeLock = -1L;
     private long lastHomeHandleMarker = -1L;
     private long lastHomeHandleDown = -1L;
 
@@ -46,8 +49,26 @@ final class TriggerClassifier {
                 && line.contains("StartUpType=0");
     }
 
+    // ColorOS 17 attempts to bind the legacy speech agent after a recognized
+    // XiaoBu hotword. A failed bind alone can also come from other callers,
+    // so require a nearby wake lock from the actual XiaoBu wakeup process.
+    private static boolean isColorOs17VoiceBind(String line) {
+        return line.startsWith("ActivityManager:")
+                && line.contains("act=heytap.speech.intent.action.BIND_SPEECH_ASSIST")
+                && line.contains("cmp=com.heytap.speechassist/.agent.SpeechAssistAgentService");
+    }
+
+    private static boolean isColorOs17VoiceWakeLock(String line) {
+        return line.startsWith("OplusAONSmartDim:")
+                && line.contains("onWakeLockAcquireLocked:")
+                && line.contains("packageName=com.oplus.ovoicemanager.wakeup")
+                && line.contains("tag=\"WakeupService:\"");
+    }
+
     static boolean isCandidateLine(String line) {
-        return line != null && (isBreenoTouchRoute(line)
+        return line != null && (isColorOs17VoiceBind(line)
+                || isColorOs17VoiceWakeLock(line)
+                || isBreenoTouchRoute(line)
                 || isHomeHandleMarker(line)
                 || isHomeHandleDown(line)
                 || isColorOs17OcrRoute(line)
@@ -67,24 +88,27 @@ final class TriggerClassifier {
         observed = Source.NONE;
         if (line == null || line.isEmpty()) return Source.NONE;
         if (line.contains("wakeUpSpeechAssist caller_package: com.oplus.ovoicemanager.wakeup")) {
-            // ColorOS 17 may wake the display without subsequently attempting
-            // the disabled SpeechService. Treat the explicit XiaoBu wake marker
-            // as a voice trigger only when the user enabled voice routing.
-            lastVoiceMarker = now;
-            observed = Source.VOICE_WAKE;
-            if (!voiceWakeEnabled) {
-                decision = Decision.VOICE_MARKER;
-                return Source.NONE;
-            }
-            if (recent(lastTrigger, now, DEBOUNCE_MS - 1L)
-                    || recent(lastPowerMarker, now, POWER_MARKER_WINDOW_MS)) {
-                decision = Decision.DEBOUNCED;
-                return Source.NONE;
-            }
-            lastTrigger = now;
+            // Legacy verified marker: it already identifies the wakeup caller.
             lastVoiceMarker = -1L;
-            decision = Decision.ACCEPTED;
-            return Source.VOICE_WAKE;
+            return acceptVoiceWake(now, voiceWakeEnabled);
+        }
+        if (isColorOs17VoiceBind(line)) {
+            lastColorOs17VoiceBind = now;
+            if (recent(lastColorOs17VoiceWakeLock, now, COLOROS17_WAKE_PAIR_WINDOW_MS)) {
+                lastColorOs17VoiceBind = -1L;
+                lastColorOs17VoiceWakeLock = -1L;
+                return acceptVoiceWake(now, voiceWakeEnabled);
+            }
+            return Source.NONE;
+        }
+        if (isColorOs17VoiceWakeLock(line)) {
+            lastColorOs17VoiceWakeLock = now;
+            if (recent(lastColorOs17VoiceBind, now, COLOROS17_WAKE_PAIR_WINDOW_MS)) {
+                lastColorOs17VoiceBind = -1L;
+                lastColorOs17VoiceWakeLock = -1L;
+                return acceptVoiceWake(now, voiceWakeEnabled);
+            }
+            return Source.NONE;
         }
         if (isHomeHandleMarker(line)) {
             lastHomeHandleMarker = now;
@@ -136,6 +160,22 @@ final class TriggerClassifier {
         lastTrigger = now;
         decision = Decision.ACCEPTED;
         return power ? Source.POWER : (voice ? Source.VOICE_WAKE : Source.HOME_GESTURE);
+    }
+
+    private Source acceptVoiceWake(long now, boolean enabled) {
+        observed = Source.VOICE_WAKE;
+        if (!enabled) {
+            decision = Decision.VOICE_MARKER;
+            return Source.NONE;
+        }
+        if (recent(lastTrigger, now, DEBOUNCE_MS - 1L)
+                || recent(lastPowerMarker, now, POWER_MARKER_WINDOW_MS)) {
+            decision = Decision.DEBOUNCED;
+            return Source.NONE;
+        }
+        lastTrigger = now;
+        decision = Decision.ACCEPTED;
+        return Source.VOICE_WAKE;
     }
 
     static boolean targetsAssistant(Source source, boolean powerGemini,
