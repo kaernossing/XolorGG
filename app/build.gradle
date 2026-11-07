@@ -99,7 +99,7 @@ android {
         versionCode Integer.parseInt(providers.gradleProperty("xolorggVersionCode").getOrElse("17000115"))
         def cameraMode = providers.gradleProperty('cameraQueryMode').getOrElse('binder')
         if (!(cameraMode in ['binder', 'shell'])) throw new GradleException('cameraQueryMode must be binder or shell')
-        versionName cameraMode == 'shell' ? "17.0.0.103.8-baseline" : "17.0.0.103.7"
+        versionName cameraMode == 'shell' ? "17.0.0.103.8-baseline" : "17.0.0.103.8"
         buildConfigField 'boolean', 'CAMERA_BINDER_QUERIES', (cameraMode == 'binder').toString()
         buildConfigField 'String', 'AGENT_START_SCRIPT', groovy.json.JsonOutput.toJson(rootProject.file('tools/activate-agent.sh').getText('UTF-8'))
     }
