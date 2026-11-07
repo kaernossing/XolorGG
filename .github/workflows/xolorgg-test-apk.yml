@@ -8,6 +8,10 @@ on:
 
 # Stable signing is enabled through repository Actions secrets.
 
+concurrency:
+  group: xolorgg-test-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
