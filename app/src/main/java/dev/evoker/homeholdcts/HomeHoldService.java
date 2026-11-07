@@ -133,6 +133,7 @@ public class HomeHoldService extends Service {
 
     private volatile SingleDirectLogdSession directLogdSession;
     private final TriggerClassifier triggerClassifier = new TriggerClassifier();
+    private final PendingVoiceLiveUnlock pendingVoiceLiveUnlock = new PendingVoiceLiveUnlock();
 
     private volatile int runtimeDelayMs =
             MainActivity.DEFAULT_CTS_DELAY_MS;
@@ -174,6 +175,12 @@ public class HomeHoldService extends Service {
             }
 
             String action = intent.getAction();
+            if (Intent.ACTION_USER_PRESENT.equals(action)) {
+                // Android has completed ordinary user authentication.
+                // Never dismiss the keyguard or open Live over it.
+                mainHandler.postDelayed(
+                        HomeHoldService.this::maybeStartDeferredVoiceLive, 750L);
+            }
             if (overlayGuardian != null) {
                 overlayGuardian.onSystemTransition(action);
             } else {
@@ -393,6 +400,9 @@ public class HomeHoldService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        synchronized (triggerLock) {
+            pendingVoiceLiveUnlock.cancel();
+        }
         WirelessRecovery.get(this).watcherRunning(false);
         if (instance == this) instance = null;
         adbLogGeneration++;
@@ -551,6 +561,11 @@ public class HomeHoldService extends Service {
         runtimeVoiceWakeGeminiLive =
                 data.getBoolean(WatcherIpc.KEY_VOICE_WAKE_GEMINI_LIVE,
                         runtimeVoiceWakeGeminiLive);
+        if (!runtimeVoiceWakeGeminiLive || !runtimeVoiceWakeAssistant) {
+            synchronized (triggerLock) {
+                pendingVoiceLiveUnlock.cancel();
+            }
+        }
 
         runtimeSwapCtsAssistant =
                 data.getBoolean(
@@ -747,9 +762,15 @@ public class HomeHoldService extends Service {
             // route if the agent is absent or refuses the request.
             if (source == TriggerClassifier.Source.VOICE_WAKE
                     && targetAssistant
-                    && runtimeVoiceWakeGeminiLive
-                    && requestGeminiLiveIfUnlocked(requestId)) {
-                return;
+                    && runtimeVoiceWakeGeminiLive) {
+                if (isKeyguardShowing()) {
+                    pendingVoiceLiveUnlock.arm(SystemClock.elapsedRealtime());
+                    ActivationDiagnostics.event(this, requestId,
+                            "GEMINI_LIVE deferred until user unlock");
+                    Log.i(TAG, "Voice Live deferred until regular unlock");
+                } else if (requestGeminiLiveIfUnlocked(requestId)) {
+                    return;
+                }
             }
             if (activationRunner != null) {
                 if (targetAssistant) {
@@ -769,13 +790,34 @@ public class HomeHoldService extends Service {
         }
     }
 
-    private boolean requestGeminiLiveIfUnlocked(String requestId) {
+    private boolean isKeyguardShowing() {
         try {
             android.app.KeyguardManager keyguard =
                     getSystemService(android.app.KeyguardManager.class);
-            if (keyguard == null || keyguard.isKeyguardLocked() || keyguard.isDeviceLocked()) {
-                return false;
+            return keyguard == null || keyguard.isKeyguardLocked() || keyguard.isDeviceLocked();
+        } catch (RuntimeException unavailable) {
+            return true; // fail closed
+        }
+    }
+
+    private void maybeStartDeferredVoiceLive() {
+        synchronized (triggerLock) {
+            if (!running || !isEnabled() || !runtimeVoiceWakeAssistant
+                    || !runtimeVoiceWakeGeminiLive) {
+                pendingVoiceLiveUnlock.cancel();
+                return;
             }
+            if (isKeyguardShowing()) return;
+            if (!pendingVoiceLiveUnlock.consume(SystemClock.elapsedRealtime())) return;
+            if (!requestGeminiLiveIfUnlocked("voice-wake-after-unlock")) {
+                Log.i(TAG, "Deferred voice Live could not start; no retry after unlock");
+            }
+        }
+    }
+
+    private boolean requestGeminiLiveIfUnlocked(String requestId) {
+        try {
+            if (isKeyguardShowing()) return false;
             IDesktopSearchAgent agent = WakeLogBridge.agent;
             if (agent == null || !agent.asBinder().pingBinder()) return false;
             Bundle response = agent.requestGeminiLive();
