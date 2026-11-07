@@ -31,4 +31,8 @@ final class PendingVoiceLiveUnlock {
     void cancel() {
         armedAt = -1L;
     }
+
+    boolean wasCancelled() {
+        return armedAt < 0L;
+    }
 }

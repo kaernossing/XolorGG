@@ -1320,8 +1320,10 @@ protected void onStop() {
         });
         voiceBody.addView(liveWake, margins(0, 10, 0, 4));
         voiceBody.addView(supporting(
-                "Requires the connected ADB agent. Opens Gemini and taps its actual Live button. "
-                + "If the screen is locked or the agent is unavailable, the normal Gemini assistant remains unchanged."),
+                "Requires the connected ADB agent. XiaoBu opens Gemini Live immediately while unlocked. "
+                + "When locked, XiaoBu opens the normal assistant first, then requests Live "
+                + "automatically after fingerprint unlock (within 45 seconds). "
+                + "Power long press remains normal Assistant and never queues Live."),
                 margins(0, 0, 0, 8));
 
         MaterialButton testLive = compactButton("Test Gemini Live (unlocked)");

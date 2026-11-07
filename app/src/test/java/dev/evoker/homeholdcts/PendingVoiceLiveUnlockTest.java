@@ -36,6 +36,16 @@ public class PendingVoiceLiveUnlockTest {
         assertFalse(pending.consume(46_002));
     }
 
+    @Test public void powerPressCancelsEarlierXiaoBuRequest() {
+        PendingVoiceLiveUnlock pending = new PendingVoiceLiveUnlock();
+        pending.arm(1000);
+        assertTrue(pending.isPending(1500));
+        // HomeHoldService cancels the pending request whenever POWER fires.
+        pending.cancel();
+        assertTrue(pending.wasCancelled());
+        assertFalse(pending.consume(2000));
+    }
+
     @Test public void latestRequestReplacesOlderOne() {
         PendingVoiceLiveUnlock pending = new PendingVoiceLiveUnlock();
         pending.arm(1000);
