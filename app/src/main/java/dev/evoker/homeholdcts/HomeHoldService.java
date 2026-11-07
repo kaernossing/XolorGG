@@ -714,7 +714,7 @@ public class HomeHoldService extends Service {
                 Log.i(TAG, "Breeno Touch route observed; not a confirmed gesture trigger");
             }
             TriggerClassifier.Source source = triggerClassifier.accept(
-                    line, SystemClock.elapsedRealtime());
+                    line, SystemClock.elapsedRealtime(), runtimeVoiceWakeAssistant);
             if (source == TriggerClassifier.Source.NONE) {
                 if (triggerClassifier.decision() != TriggerClassifier.Decision.IGNORED)
                     ActivationDiagnostics.trigger(this, triggerClassifier.observedSource(), "NONE", triggerClassifier.decision());
