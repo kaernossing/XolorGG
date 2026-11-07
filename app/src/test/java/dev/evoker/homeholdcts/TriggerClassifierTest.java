@@ -76,6 +76,56 @@ public class TriggerClassifierTest {
         assertEquals(NONE, new TriggerClassifier().accept(line, 1000));
         assertFalse(TriggerClassifier.isBreenoTouchRoute("NavigationBarHandle: send down event"));
     }
+    private static final String HOME_HANDLE =
+            "SystemUi--NavBar: NoBackGesture-->gestureBar animation: gestureBarNotHide = true, isCorrectHomeHandle = true";
+    private static final String HOME_DOWN =
+            "SystemUi--NavBar: NoBackGesture-->send down event to NavigationBarHandle";
+    private static final String OCR_ROUTE =
+            "SystemUi--NavBar: OcrScreenService-->getServiceIntent bundle: Bundle[{StartUpType=0}]";
+
+    @Test public void colorOs17HomeHoldActivatesWithoutSpeechService() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertTrue(TriggerClassifier.isCandidateLine(HOME_HANDLE));
+        assertTrue(TriggerClassifier.isCandidateLine(HOME_DOWN));
+        assertTrue(TriggerClassifier.isCandidateLine(OCR_ROUTE));
+        assertEquals(NONE, c.accept(HOME_HANDLE, 1000));
+        assertEquals(NONE, c.accept(HOME_DOWN, 1002));
+        assertEquals(HOME_GESTURE, c.accept(OCR_ROUTE, 1300));
+        assertEquals(NONE, c.accept(OCR_ROUTE, 1305));
+    }
+
+    @Test public void ordinaryHomeSwipeNeverTriggersCts() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(HOME_HANDLE, 1000));
+        assertEquals(NONE, c.accept(HOME_DOWN, 1001));
+        assertEquals(NONE, c.accept("SystemUi--NavBar: SideGestureDetector--> ev:MotionEvent { action=ACTION_UP }", 1400));
+        assertEquals(NONE, c.accept("VibratorManagerServiceExtImpl: opPkg=com.android.launcher mEffectId=367", 1401));
+    }
+
+    @Test public void ocrRouteAloneOrAfterExpiredHandleDoesNotTrigger() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(OCR_ROUTE, 100));
+        assertEquals(NONE, c.accept(HOME_DOWN, 200));
+        assertEquals(NONE, c.accept(OCR_ROUTE, 300));
+        assertEquals(NONE, c.accept(HOME_HANDLE, 1000));
+        assertEquals(NONE, c.accept(HOME_DOWN, 1001));
+        assertEquals(NONE, c.accept(OCR_ROUTE, 2300));
+        assertEquals(NONE, c.accept(OCR_ROUTE, 2301));
+    }
+
+    @Test public void colorOs17HomeHoldRespectsDebounceAndSwap() {
+        TriggerClassifier c = new TriggerClassifier();
+        c.accept(HOME_HANDLE, 1000);
+        c.accept(HOME_DOWN, 1001);
+        assertEquals(HOME_GESTURE, c.accept(OCR_ROUTE, 1100));
+        c.accept(HOME_HANDLE, 1800);
+        c.accept(HOME_DOWN, 1801);
+        assertEquals(NONE, c.accept(OCR_ROUTE, 1850));
+        assertEquals(TriggerClassifier.Decision.DEBOUNCED, c.decision());
+        assertFalse(TriggerClassifier.targetsAssistant(HOME_GESTURE, true, false, false));
+        assertTrue(TriggerClassifier.targetsAssistant(HOME_GESTURE, true, false, true));
+    }
+
     @Test public void preferencesAndSwapPreserved() {
         assertTrue(TriggerClassifier.targetsAssistant(POWER,true,false,false));
         assertFalse(TriggerClassifier.targetsAssistant(HOME_GESTURE,true,false,false));
