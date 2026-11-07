@@ -52,15 +52,34 @@ public class TriggerClassifierTest {
     @Test public void gestureAndVoiceRetainTheirRoutes() {
         TriggerClassifier c=new TriggerClassifier();
         assertEquals(HOME_GESTURE,c.accept(SERVICE,0));
-        assertEquals(NONE,c.accept(VOICE,3000));
-        assertEquals(VOICE_WAKE,c.accept(SERVICE,3001));
+        assertEquals(VOICE_WAKE,c.accept(VOICE,3000));
+        assertEquals(NONE,c.accept(SERVICE,3001));
         assertEquals(HOME_GESTURE,c.accept(SERVICE,6000));
     }
+    @Test public void optedInVoiceWakeWorksWithoutSpeechServiceOnColorOs17() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(VOICE_WAKE, c.accept(VOICE, 1000, true));
+        assertEquals(TriggerClassifier.Decision.ACCEPTED, c.decision());
+        assertEquals(NONE, c.accept(VOICE, 1100, true));
+        assertEquals(TriggerClassifier.Decision.DEBOUNCED, c.decision());
+        assertEquals(NONE, c.accept(SERVICE, 1200, true));
+        assertEquals(VOICE_WAKE, c.accept(VOICE, 4000, true));
+    }
+
+    @Test public void voiceWakeDisabledDoesNotLaunchCtsOrBlockPower() {
+        TriggerClassifier c = new TriggerClassifier();
+        assertEquals(NONE, c.accept(VOICE, 1000, false));
+        assertEquals(TriggerClassifier.Decision.VOICE_MARKER, c.decision());
+        assertEquals(NONE, c.accept(SERVICE, 1100, false));
+        assertEquals(TriggerClassifier.Decision.VOICE_MARKER, c.decision());
+        assertEquals(POWER, c.accept(KEY, 1200, false));
+    }
+
     @Test public void powerTakesPriorityOverStaleVoiceMarker() {
         TriggerClassifier c=new TriggerClassifier();
-        c.accept(VOICE,100);
-        assertEquals(POWER,c.accept(KEY,101));
-        assertEquals(NONE,c.accept(SERVICE,102));
+        assertEquals(NONE,c.accept(VOICE,100,false));
+        assertEquals(POWER,c.accept(KEY,101,false));
+        assertEquals(NONE,c.accept(SERVICE,102,false));
     }
     @Test public void unrelatedAndIncompleteLogsDoNothing() {
         TriggerClassifier c=new TriggerClassifier();
